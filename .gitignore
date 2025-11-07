@@ -1,0 +1,34 @@
+﻿# ---- OS / Editor ----
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+.vscode/
+.idea/
+
+# ---- Root env ----
+.env
+.env.*
+
+# ---- Frontend (React/Vite) ----
+frontend/node_modules/
+frontend/dist/
+frontend/.cache/
+frontend/coverage/
+frontend/.eslintcache
+frontend/.env.*
+frontend/*.env.local
+
+# ---- Backend (Laravel) ----
+backend/vendor/
+backend/storage/*
+!backend/storage/app/.gitignore
+!backend/storage/framework/.gitignore
+!backend/storage/logs/.gitignore
+backend/.env
+backend/.env.*
+backend/public/storage
+backend/bootstrap/cache/*.php
+
+# ---- Local extras ----
+/task-report
