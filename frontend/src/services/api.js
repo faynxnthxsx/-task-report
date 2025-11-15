@@ -1,9 +1,12 @@
+// src/services/api.js
 import axios from "axios";
 
-const BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+// ใช้ '/api' ผ่าน Vite proxy ตอน dev
+// ถ้าตั้ง VITE_API_URL ไว้ ให้ชี้เป็น '/api' หรือ 'https://your-host/api'
+const BASE = (import.meta.env.VITE_API_URL || "/api").replace(/\/+$/, "");
 
 export const api = axios.create({
-  baseURL: `${BASE}/api`,
+  baseURL: BASE,             // << ไม่ต้อง + '/api' ซ้ำ
   headers: { "Content-Type": "application/json" },
   timeout: 10000,
 });

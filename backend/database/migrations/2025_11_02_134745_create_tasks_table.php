@@ -13,7 +13,10 @@ return new class extends Migration
     {
         Schema::create('tasks', function (Blueprint $table) {
             $table->id();
-            $table->timestamps();
+            $table->string('title');                     // ชื่องาน
+            $table->text('detail')->nullable();          // รายละเอียดงาน
+            $table->string('status')->default('pending'); // สถานะงาน เช่น pending/done
+            $table->timestamps();                        // created_at, updated_at
         });
     }
 

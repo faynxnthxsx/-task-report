@@ -1,6 +1,6 @@
 // src/App.jsx
 import { useEffect, useState } from "react";
-import "./styles.css"; // <— เพิ่มไฟล์นี้ (ข้อ 2)
+import "./styles.css";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
@@ -12,13 +12,25 @@ export default function App() {
   const [editingId, setEditingId] = useState(null);
   const [err, setErr] = useState("");
 
+  // โหลดรายการงานจาก Laravel
   async function fetchTasks() {
     try {
       setLoading(true);
       setErr("");
-      const res = await fetch(`${API_URL}/api/tasks`);
+
+      const res = await fetch(`${API_URL}/api/tasks`, {
+        headers: { Accept: "application/json" },
+      });
       const data = await res.json();
-      setTasks(Array.isArray(data) ? data : []);
+
+      // Laravel Resource collection ส่ง { data: [...] }
+      if (Array.isArray(data?.data)) {
+        setTasks(data.data);
+      } else if (Array.isArray(data)) {
+        setTasks(data);
+      } else {
+        setTasks([]);
+      }
     } catch (e) {
       setErr(e.message || "โหลดรายการไม่สำเร็จ");
     } finally {
@@ -35,6 +47,7 @@ export default function App() {
     setForm((s) => ({ ...s, [name]: value }));
   }
 
+  // เพิ่ม / แก้ไข งาน
   async function onSubmit(e) {
     e.preventDefault();
     if (!form.title.trim()) return;
@@ -48,13 +61,33 @@ export default function App() {
         ? `${API_URL}/api/tasks/${editingId}`
         : `${API_URL}/api/tasks`;
 
+      // ส่งเฉพาะ field ที่ backend รองรับชัวร์ ๆ (ตอนนี้คือ title)
+      const payload = { title: form.title };
+
       const res = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(form),
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload),
       });
 
-      if (!res.ok) throw new Error("บันทึกไม่สำเร็จ");
+      if (!res.ok) {
+        // พยายามอ่าน error จาก backend (ถ้ามี)
+        let msg = "บันทึกไม่สำเร็จ";
+        try {
+          const data = await res.json();
+          if (data?.message) msg = data.message;
+          if (data?.errors) {
+            const all = Object.values(data.errors).flat();
+            if (all.length) msg = all.join("\n");
+          }
+        } catch {
+          // ถ้าอ่าน JSON ไม่ได้ก็ใช้ข้อความเดิม
+        }
+        throw new Error(msg);
+      }
 
       setForm({ title: "", detail: "" });
       setEditingId(null);
@@ -69,7 +102,10 @@ export default function App() {
   async function onDelete(id) {
     if (!confirm("ลบงานนี้ใช่ไหม?")) return;
     try {
-      await fetch(`${API_URL}/api/tasks/${id}`, { method: "DELETE" });
+      await fetch(`${API_URL}/api/tasks/${id}`, {
+        method: "DELETE",
+        headers: { Accept: "application/json" },
+      });
       setTasks((list) => list.filter((t) => t.id !== id));
     } catch (e) {
       alert("ลบไม่สำเร็จ");
@@ -90,8 +126,8 @@ export default function App() {
   return (
     <div className="page">
       <header className="hero">
-       <h1 className="hero-title">
-          Task & Report Management System <span className="dash">—</span> 
+        <h1 className="hero-title">
+          Task &amp; Report Management System <span className="dash">—</span>
         </h1>
         <p className="hero-desc">
           ระบบสำหรับเพิ่ม/แก้ไข/ลบงาน 
@@ -137,7 +173,11 @@ export default function App() {
 
             <div className="actions">
               <button className="btn primary" disabled={saving}>
-                {saving ? "กำลังบันทึก..." : editingId ? "บันทึกการแก้ไข" : "เพิ่มงาน"}
+                {saving
+                  ? "กำลังบันทึก..."
+                  : editingId
+                  ? "บันทึกการแก้ไข"
+                  : "เพิ่มงาน"}
               </button>
               <button
                 type="button"
@@ -171,10 +211,16 @@ export default function App() {
               {t.detail && <p className="task-detail">{t.detail}</p>}
 
               <div className="task-actions">
-                <button className="btn small primary" onClick={() => onEdit(t)}>
+                <button
+                  className="btn small primary"
+                  onClick={() => onEdit(t)}
+                >
                   แก้ไข
                 </button>
-                <button className="btn small danger" onClick={() => onDelete(t.id)}>
+                <button
+                  className="btn small danger"
+                  onClick={() => onDelete(t.id)}
+                >
                   ลบ
                 </button>
               </div>
@@ -190,7 +236,7 @@ export default function App() {
       </main>
 
       <footer className="footer">
-        <span>© {new Date().getFullYear()} Task & Report Management</span>
+        <span>© {new Date().getFullYear()} Task &amp; Report Management</span>
         <span className="sep">•</span>
         <span>Designed for Portfolio</span>
       </footer>
