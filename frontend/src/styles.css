@@ -30,11 +30,32 @@ body{
 }
 
 /* ====== Layout ====== */
-.page{ min-height:100%; display:flex; flex-direction:column; }
-.container{ width:min(1100px, 92%); margin:0 auto; }
+.page{
+  min-height:100%;
+  display:flex;
+  flex-direction:column;
+  align-items:center;          /* จัดให้ content อยู่กลางแนวนอน */
+}
 
+/* hero, main container, หัวรายการ, grid, footer ให้กว้างไม่เกิน 1100 แล้วอยู่กลาง */
+.hero,
+.container,
+.list-head,
+.grid,
+.footer{
+  width:100%;
+  max-width:1100px;
+  margin-inline:auto;
+}
+
+/* main */
+.container{
+  padding:0 1.5rem 3rem;
+}
+
+/* ====== Hero ====== */
 .hero{
-  padding:64px 0 28px;
+  padding:64px 1.5rem 28px;
   text-align:center;
 }
 .hero-badge{
@@ -71,6 +92,9 @@ body{
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding:24px;
+
+  /* ให้กล่องฟอร์มแคบลงและอยู่กลาง */
+  max-width:960px;
   margin:28px auto;
 }
 .card-head{
@@ -80,8 +104,14 @@ body{
 .card-title{ margin:0; font-size:20px; }
 
 .list-head{
-  display:flex; align-items:center; justify-content:space-between;
-  margin:26px 0 8px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin:26px auto 8px;
+  padding:0 1.5rem;
+
+  /* ให้หัวรายการกว้างเท่ากับกล่องฟอร์ม */
+  max-width:960px;
 }
 .section-title{ margin:0; font-size:18px; }
 .count{ color:var(--muted); font-size:14px; }
@@ -135,7 +165,11 @@ body{
   display:grid;
   gap:16px;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  margin:16px 0 40px;
+  margin:16px auto 40px;
+  padding:0 1.5rem;
+
+  /* ให้กริดกว้างเท่ากันด้วย */
+  max-width:960px;
 }
 .task-card{
   border:1px solid var(--border);
@@ -172,11 +206,10 @@ body{
 /* ====== Footer ====== */
 .footer{
   margin-top:auto;
-  padding:22px 0 30px;
+  padding:22px 1.5rem 30px;
   text-align:center;
   color:var(--muted);
 }
-.footer .sep{ margin:0 8px; opacity:.6; }
 
 /* ====== Small ====== */
 .error{ color:#ffb4b4; margin-top:4px; }

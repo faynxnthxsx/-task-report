@@ -61,8 +61,12 @@ export default function App() {
         ? `${API_URL}/api/tasks/${editingId}`
         : `${API_URL}/api/tasks`;
 
-      // ส่งเฉพาะ field ที่ backend รองรับชัวร์ ๆ (ตอนนี้คือ title)
-      const payload = { title: form.title };
+      // ✅ ส่งทั้ง title + detail ไป backend
+      const payload = {
+        title: form.title,
+        detail: form.detail,
+        // status ไม่ส่งก็ได้ เพราะ migration ตั้ง default เป็น 'pending'
+      };
 
       const res = await fetch(url, {
         method,
@@ -130,7 +134,7 @@ export default function App() {
           Task &amp; Report Management System <span className="dash">—</span>
         </h1>
         <p className="hero-desc">
-          ระบบสำหรับเพิ่ม/แก้ไข/ลบงาน 
+          ระบบการจัดการงานเเละรายงานผล
         </p>
       </header>
 
@@ -138,7 +142,7 @@ export default function App() {
         <section className="card">
           <div className="card-head">
             <h2 className="card-title">
-              {editingId ? "แก้ไขงาน" : "เพิ่มงานใหม่"}
+              {editingId ? "แก้ไขงาน" : "เพิ่มงาน"}
             </h2>
             {editingId && (
               <button className="btn ghost" onClick={onCancelEdit}>
@@ -179,15 +183,6 @@ export default function App() {
                   ? "บันทึกการแก้ไข"
                   : "เพิ่มงาน"}
               </button>
-              <button
-                type="button"
-                className="btn"
-                onClick={fetchTasks}
-                disabled={loading}
-                title="รีเฟรชข้อมูล"
-              >
-                {loading ? "กำลังโหลด..." : "รีโหลด"}
-              </button>
             </div>
 
             {err && <p className="error">{err}</p>}
@@ -195,7 +190,7 @@ export default function App() {
         </section>
 
         <section className="list-head">
-          <h2 className="section-title">รายการงาน</h2>
+          <h2 className="section-title">รายงาน</h2>
           <span className="count">{tasks.length} รายการ</span>
         </section>
 
