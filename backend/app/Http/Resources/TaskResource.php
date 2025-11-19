@@ -8,14 +8,18 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class TaskResource extends JsonResource
 {
     /**
-     * แปลง resource ให้เป็น array
+     * แปลง resource ให้เป็น array (รูปแบบ JSON ส่งไปให้ frontend)
      */
     public function toArray(Request $request): array
     {
         return [
             'id'         => $this->id,
             'title'      => $this->title,
-            // ถ้ามีฟิลด์อื่นในตาราง เช่น detail, status ค่อยเพิ่มทีหลังได้
+
+            // ✅ เพิ่มฟิลด์ที่ใช้ใน frontend
+            'detail'     => $this->detail,
+            'status'     => $this->status,   // pending / in_progress / completed
+
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

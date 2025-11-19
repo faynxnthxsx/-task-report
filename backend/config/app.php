@@ -1,5 +1,7 @@
 <?php
 
+// ไฟล์นี้จะ return array ของค่าตั้งค่า "ระดับแอป" (application config)
+// Laravel จะโหลดไฟล์นี้เมื่อเรียกใช้ config('app.xxx')
 return [
 
     /*
@@ -7,12 +9,12 @@ return [
     | Application Name
     |--------------------------------------------------------------------------
     |
-    | This value is the name of your application, which will be used when the
-    | framework needs to place the application's name in a notification or
-    | other UI elements where an application name needs to be displayed.
+    | ชื่อของแอปพลิเคชัน
+    | จะถูกใช้ในหลายที่ เช่น เวลาแจ้งเตือน (notification) หรือ UI ที่ต้องโชว์ชื่อแอป
     |
     */
-
+    // อ่านค่าจากตัวแปร APP_NAME ในไฟล์ .env
+    // ถ้าไม่มีให้ใช้ค่าเริ่มต้นเป็น 'Laravel'
     'name' => env('APP_NAME', 'Laravel'),
 
     /*
@@ -20,12 +22,12 @@ return [
     | Application Environment
     |--------------------------------------------------------------------------
     |
-    | This value determines the "environment" your application is currently
-    | running in. This may determine how you prefer to configure various
-    | services the application utilizes. Set this in your ".env" file.
+    | กำหนด environment ปัจจุบันของแอป เช่น "local", "production", "staging"
+    | โดยปกติจะใช้แยกระหว่างโหมดพัฒนา กับโหมดขึ้นเซิร์ฟจริง
     |
     */
-
+    // อ่านค่า APP_ENV จาก .env (เช่น local, production)
+    // ถ้าไม่ตั้งไว้ จะถือว่าเป็น 'production'
     'env' => env('APP_ENV', 'production'),
 
     /*
@@ -33,12 +35,13 @@ return [
     | Application Debug Mode
     |--------------------------------------------------------------------------
     |
-    | When your application is in debug mode, detailed error messages with
-    | stack traces will be shown on every error that occurs within your
-    | application. If disabled, a simple generic error page is shown.
+    | ถ้าเปิด debug = true (ใน .env: APP_DEBUG=true)
+    | เวลาเกิด error จะโชว์ข้อความละเอียด + stack trace
+    | ถ้าปิด (false) จะโชว์หน้า error แบบง่าย ๆ เพื่อความปลอดภัย
     |
     */
-
+    // แปลงค่าที่ได้จาก env เป็น boolean จริง ๆ ด้วย (bool)
+    // ค่า default = false (ปลอดภัยกว่าในเซิร์ฟจริง)
     'debug' => (bool) env('APP_DEBUG', false),
 
     /*
@@ -46,12 +49,11 @@ return [
     | Application URL
     |--------------------------------------------------------------------------
     |
-    | This URL is used by the console to properly generate URLs when using
-    | the Artisan command line tool. You should set this to the root of
-    | the application so that it's available within Artisan commands.
+    | URL หลักของแอป เช่น http://localhost หรือ https://myapp.com
+    | ใช้เวลาสร้างลิงก์จากคำสั่ง artisan หรือในบาง helper
     |
     */
-
+    // เอาจาก APP_URL ใน .env ถ้าไม่มีใช้ http://localhost
     'url' => env('APP_URL', 'http://localhost'),
 
     /*
@@ -59,12 +61,11 @@ return [
     | Application Timezone
     |--------------------------------------------------------------------------
     |
-    | Here you may specify the default timezone for your application, which
-    | will be used by the PHP date and date-time functions. The timezone
-    | is set to "UTC" by default as it is suitable for most use cases.
+    | timezone หลักของแอป ใช้กับฟังก์ชันวันที่/เวลาใน PHP
+    | ค่า default จะใช้ 'UTC' (เวลาโลก) ซึ่งเหมาะกับระบบทั่วไป
+    | ถ้าอยากใช้เวลาไทยสามารถเปลี่ยนเป็น 'Asia/Bangkok'
     |
     */
-
     'timezone' => 'UTC',
 
     /*
@@ -72,16 +73,21 @@ return [
     | Application Locale Configuration
     |--------------------------------------------------------------------------
     |
-    | The application locale determines the default locale that will be used
-    | by Laravel's translation / localization methods. This option can be
-    | set to any locale for which you plan to have translation strings.
+    | locale = ภาษาหลักของระบบ (สำหรับการแปลข้อความต่าง ๆ)
+    | ใช้ร่วมกับฟีเจอร์ translation ของ Laravel (ไฟล์ resources/lang)
     |
     */
 
+    // ภาษาหลักของแอป (เช่น 'en', 'th')
+    // อ่านจาก APP_LOCALE ใน .env ถ้าไม่มีใช้ 'en'
     'locale' => env('APP_LOCALE', 'en'),
 
+    // fallback_locale = ถ้าหาไฟล์แปลภาษาของ locale หลักไม่เจอ
+    // จะ fallback มาใช้ภาษานี้แทน
     'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),
 
+    // locale ที่ faker (ตัวสร้างข้อมูลปลอม ๆ) จะใช้
+    // เช่น เวลา factory สร้างชื่อ/ที่อยู่
     'faker_locale' => env('APP_FAKER_LOCALE', 'en_US'),
 
     /*
@@ -89,17 +95,28 @@ return [
     | Encryption Key
     |--------------------------------------------------------------------------
     |
-    | This key is utilized by Laravel's encryption services and should be set
-    | to a random, 32 character string to ensure that all encrypted values
-    | are secure. You should do this prior to deploying the application.
+    | คีย์สำหรับการเข้ารหัสข้อมูลของ Laravel (เช่น cookie, data ที่ encrypt)
+    | ต้องเป็น string ยาว 32 ตัวอักษรแบบสุ่ม และต้องเก็บเป็นความลับ
+    | ปกติใช้คำสั่ง php artisan key:generate เพื่อสร้างใน .env
     |
     */
 
+    // อัลกอริทึมที่ใช้เข้ารหัสข้อมูล
     'cipher' => 'AES-256-CBC',
 
+    // key หลักสำหรับใช้เข้ารหัส
+    // จะอ่านจาก APP_KEY ใน .env
     'key' => env('APP_KEY'),
 
+    // previous_keys = กุญแจเก่า ๆ ที่เคยใช้มาก่อน
+    // ใช้สำหรับกรณี rotate key (เปลี่ยน key ใหม่) แต่ยังอยากถอดรหัสข้อมูลเก่าได้
     'previous_keys' => [
+        // อธิบาย:
+        // - env('APP_PREVIOUS_KEYS', '') จะดึง string จาก .env
+        //   เช่น "key1,key2,key3"
+        // - (string) แปลงให้แน่ใจว่าเป็น string
+        // - explode(',', ...) แยกด้วย comma กลายเป็น array
+        // - array_filter(...) ตัดค่าที่ว่างออก
         ...array_filter(
             explode(',', (string) env('APP_PREVIOUS_KEYS', ''))
         ),
@@ -110,16 +127,21 @@ return [
     | Maintenance Mode Driver
     |--------------------------------------------------------------------------
     |
-    | These configuration options determine the driver used to determine and
-    | manage Laravel's "maintenance mode" status. The "cache" driver will
-    | allow maintenance mode to be controlled across multiple machines.
+    | ส่วนนี้กำหนดว่าจะใช้ driver ไหนในการจัดการ "maintenance mode"
+    | เช่น ตอนปิดระบบชั่วคราวเพื่ออัปเดต
     |
-    | Supported drivers: "file", "cache"
+    | driver "file" = เก็บสถานะ maintenance ในไฟล์
+    | driver "cache" = เก็บใน cache (เหมาะกับหลายเซิร์ฟทำงานร่วมกัน)
     |
     */
 
     'maintenance' => [
+        // อ่าน APP_MAINTENANCE_DRIVER จาก .env (file หรือ cache)
+        // ถ้าไม่ตั้งค่า ใช้ 'file' เป็นค่า default
         'driver' => env('APP_MAINTENANCE_DRIVER', 'file'),
+
+        // ถ้าใช้ driver 'cache' จะใช้ 'store' ตัวไหน (เช่น redis, database)
+        // ค่า default ที่ตั้งไว้ที่นี่คือ 'database'
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 

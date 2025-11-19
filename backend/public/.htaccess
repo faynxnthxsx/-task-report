@@ -1,25 +1,55 @@
 <IfModule mod_rewrite.c>
+    <!-- ถ้า Apache เปิดโมดูล mod_negotiation อยู่ -->
     <IfModule mod_negotiation.c>
+        # ปิด MultiViews และ Indexes
+        # - MultiViews: ฟีเจอร์เดาไฟล์จาก URL (เช่น /about อาจไปแมตช์ about.html/about.php)
+        #   Laravel ไม่อยากให้ Apache เดา อยากให้ทุกอย่างเข้า index.php เอง
+        # - Indexes: ปิดการแสดงรายการไฟล์ในโฟลเดอร์ (กันคนเห็นไฟล์ทั้งหมดเวลาเข้าเป็น path ตรง ๆ)
         Options -MultiViews -Indexes
     </IfModule>
 
+    # เปิดใช้ mod_rewrite (เครื่องยนต์ rewrite URL)
     RewriteEngine On
 
+    # -----------------------------
     # Handle Authorization Header
+    # -----------------------------
+    # ถ้า request มี header "Authorization" ติดมาด้วย
     RewriteCond %{HTTP:Authorization} .
+    # ให้ตั้ง environment variable ชื่อ HTTP_AUTHORIZATION จากค่า header นั้น
+    # (บางระบบ PHP อ่านค่า header ตรง ๆ ไม่ได้ ต้องใช้ env นี้แทน)
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
+    # -----------------------------
     # Handle X-XSRF-Token Header
+    # -----------------------------
+    # ถ้ามี header "X-XSRF-Token"
     RewriteCond %{HTTP:x-xsrf-token} .
+    # ก็จัดเก็บเป็น environment variable HTTP_X_XSRF_TOKEN เช่นกัน
+    # เอาไว้ให้ PHP/Laravel ใช้ตรวจ CSRF/XSRF เวลาเรียก API
     RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
 
+    # ---------------------------------------
     # Redirect Trailing Slashes If Not A Folder...
+    # ---------------------------------------
+    # ถ้า request ไม่ได้ชี้ไปที่โฟลเดอร์จริง
     RewriteCond %{REQUEST_FILENAME} !-d
+    # และ URL ลงท้ายด้วย / (เช่น /tasks/, /user/profile/)
     RewriteCond %{REQUEST_URI} (.+)/$
+    # ให้ redirect 301 ไป path เดิมแต่ตัด / ท้ายสุดออก
+    # เช่น /tasks/ -> /tasks
+    # %1 คือกลุ่ม (.+) ที่จับได้จาก RewriteCond ด้านบน
     RewriteRule ^ %1 [L,R=301]
 
+    # ---------------------------------------
     # Send Requests To Front Controller...
+    # ---------------------------------------
+    # ถ้า request ไม่ได้ชี้ไปที่โฟลเดอร์จริง
     RewriteCond %{REQUEST_FILENAME} !-d
+    # และไม่ได้ชี้ไปที่ไฟล์จริง (เช่น .css, .js, .png)
     RewriteCond %{REQUEST_FILENAME} !-f
+    # ให้ส่งทุก request ไปที่ index.php
+    # ตรงนี้คือหัวใจของ Laravel: ให้ index.php เป็น "front controller"
+    # แล้ว Laravel Router ค่อยตัดสินใจต่อว่า route ไหนจะทำอะไร
     RewriteRule ^ index.php [L]
 </IfModule>

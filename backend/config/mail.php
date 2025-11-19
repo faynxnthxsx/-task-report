@@ -7,13 +7,13 @@ return [
     | Default Mailer
     |--------------------------------------------------------------------------
     |
-    | This option controls the default mailer that is used to send all email
-    | messages unless another mailer is explicitly specified when sending
-    | the message. All additional mailers can be configured within the
-    | "mailers" array. Examples of each type of mailer are provided.
+    | กำหนดว่าให้ใช้ mailer ตัวไหนเป็น "ค่าเริ่มต้น"
+    | เวลาเราเรียกส่งอีเมลโดยไม่ระบุ mailer เอง
     |
     */
 
+    // อ่านจาก .env: MAIL_MAILER
+    // ถ้าไม่ตั้ง ใช้ 'log' = เขียนเนื้อหาเมลลง log แทนการส่งจริง (ดีสำหรับ dev)
     'default' => env('MAIL_MAILER', 'log'),
 
     /*
@@ -21,73 +21,91 @@ return [
     | Mailer Configurations
     |--------------------------------------------------------------------------
     |
-    | Here you may configure all of the mailers used by your application plus
-    | their respective settings. Several examples have been configured for
-    | you and you are free to add your own as your application requires.
+    | กำหนด mailer ต่าง ๆ ที่แอปเราจะใช้ได้
+    | แต่ละ mailer มี transport (วิธีส่ง) และ config ของตัวเอง
     |
-    | Laravel supports a variety of mail "transport" drivers that can be used
-    | when delivering an email. You may specify which one you're using for
-    | your mailers below. You may also add additional mailers if needed.
-    |
-    | Supported: "smtp", "sendmail", "mailgun", "ses", "ses-v2",
-    |            "postmark", "resend", "log", "array",
-    |            "failover", "roundrobin"
+    | ตัวอย่าง transport ที่รองรับ:
+    |   "smtp", "sendmail", "mailgun", "ses", "ses-v2",
+    |   "postmark", "resend", "log", "array",
+    |   "failover", "roundrobin"
     |
     */
 
     'mailers' => [
 
+        // ---------- SMTP ----------
+        // ใช้ส่งอีเมลผ่าน SMTP server (Gmail SMTP, Mailtrap, ฯลฯ)
         'smtp' => [
             'transport' => 'smtp',
-            'scheme' => env('MAIL_SCHEME'),
-            'url' => env('MAIL_URL'),
-            'host' => env('MAIL_HOST', '127.0.0.1'),
-            'port' => env('MAIL_PORT', 2525),
-            'username' => env('MAIL_USERNAME'),
-            'password' => env('MAIL_PASSWORD'),
-            'timeout' => null,
-            'local_domain' => env('MAIL_EHLO_DOMAIN', parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
+            'scheme' => env('MAIL_SCHEME'), // เช่น tls / ssl ถ้าบริการกำหนด
+            'url' => env('MAIL_URL'),       // บางบริการอาจให้เป็น URL เดียว
+            'host' => env('MAIL_HOST', '127.0.0.1'),  // โฮสต์ SMTP server
+            'port' => env('MAIL_PORT', 2525),         // พอร์ต SMTP (เช่น 587, 465, 2525)
+            'username' => env('MAIL_USERNAME'),       // user สำหรับ auth SMTP
+            'password' => env('MAIL_PASSWORD'),       // password สำหรับ auth SMTP
+            'timeout' => null,                        // timeout (วินาที) ถ้า null ใช้ default
+            // ชื่อโดเมนที่ใช้ในคำสั่ง EHLO/HELO (ถ้าไม่ตั้ง ใช้ host จาก APP_URL)
+            'local_domain' => env(
+                'MAIL_EHLO_DOMAIN',
+                parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_HOST)
+            ),
         ],
 
+        // ---------- Amazon SES ----------
         'ses' => [
             'transport' => 'ses',
         ],
 
+        // ---------- Postmark ----------
         'postmark' => [
             'transport' => 'postmark',
+            // ตัวอย่าง option เพิ่มเติม ที่คอมเมนต์ไว้
             // 'message_stream_id' => env('POSTMARK_MESSAGE_STREAM_ID'),
             // 'client' => [
             //     'timeout' => 5,
             // ],
         ],
 
+        // ---------- Resend ----------
         'resend' => [
             'transport' => 'resend',
         ],
 
+        // ---------- sendmail (บน Linux server) ----------
         'sendmail' => [
             'transport' => 'sendmail',
+            // path ของคำสั่ง sendmail บนระบบ (ใช้ default ถ้ายังไม่รู้)
             'path' => env('MAIL_SENDMAIL_PATH', '/usr/sbin/sendmail -bs -i'),
         ],
 
+        // ---------- log ----------
+        // ไม่ส่งเมลจริง แต่เขียนเนื้อหาเมลลง log (ใช้ debug)
         'log' => [
             'transport' => 'log',
+            // ระบุ log channel ถ้ามี (ถ้าไม่ตั้ง จะใช้ default logging channel)
             'channel' => env('MAIL_LOG_CHANNEL'),
         ],
 
+        // ---------- array ----------
+        // เก็บเมลที่ส่งไว้ใน array ใน memory ใช้สำหรับการทดสอบ (PHPUnit, ฯลฯ)
         'array' => [
             'transport' => 'array',
         ],
 
+        // ---------- failover ----------
+        // พยายามส่งผ่าน smtp ก่อน ถ้าล้มเหลว fallback ไป log
         'failover' => [
             'transport' => 'failover',
             'mailers' => [
                 'smtp',
                 'log',
             ],
+            // รอ 60 วินาทีก่อนจะลองส่งซ้ำ (กรณีทำงานเบื้องหลัง)
             'retry_after' => 60,
         ],
 
+        // ---------- roundrobin ----------
+        // สลับใช้งาน mailers หลายตัววนไป (เช่น ses กับ postmark)
         'roundrobin' => [
             'transport' => 'roundrobin',
             'mailers' => [
@@ -104,14 +122,16 @@ return [
     | Global "From" Address
     |--------------------------------------------------------------------------
     |
-    | You may wish for all emails sent by your application to be sent from
-    | the same address. Here you may specify a name and address that is
-    | used globally for all emails that are sent by your application.
+    | ตั้งค่า From: ทั่วทั้งระบบ
+    | ถ้าเราไม่กำหนดจาก Mailable เอง จะใช้ค่าจากตรงนี้
     |
     */
 
     'from' => [
+        // อีเมลผู้ส่ง เช่น no-reply@myapp.com
         'address' => env('MAIL_FROM_ADDRESS', 'hello@example.com'),
+
+        // ชื่อผู้ส่ง เช่น "Task Report System"
         'name' => env('MAIL_FROM_NAME', 'Example'),
     ],
 

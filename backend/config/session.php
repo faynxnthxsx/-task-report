@@ -9,15 +9,18 @@ return [
     | Default Session Driver
     |--------------------------------------------------------------------------
     |
-    | This option determines the default session driver that is utilized for
-    | incoming requests. Laravel supports a variety of storage options to
-    | persist session data. Database storage is a great default choice.
+    | เลือกว่าจะให้ Laravel ใช้ driver ไหนเก็บ session เป็นหลัก
+    | เช่น file, cookie, database, redis ฯลฯ
+    |
+    | Dev เล็ก ๆ ส่วนมากใช้ file หรือ database
     |
     | Supported: "file", "cookie", "database", "memcached",
     |            "redis", "dynamodb", "array"
     |
     */
 
+    // อ่านจาก .env: SESSION_DRIVER (เช่น file, database)
+    // ถ้าไม่ตั้งให้ใช้ 'database' เป็นค่า default
     'driver' => env('SESSION_DRIVER', 'database'),
 
     /*
@@ -25,15 +28,15 @@ return [
     | Session Lifetime
     |--------------------------------------------------------------------------
     |
-    | Here you may specify the number of minutes that you wish the session
-    | to be allowed to remain idle before it expires. If you want them
-    | to expire immediately when the browser is closed then you may
-    | indicate that via the expire_on_close configuration option.
+    | อายุ session (นาที) = อยู่เฉย ๆ กี่นาทีแล้วหมดอายุ (ต้องล็อกอินใหม่)
+    | expire_on_close = true = ปิด browser แล้วหมดอายุทันที
     |
     */
 
+    // อายุ session เป็นนาที (default = 120 นาที = 2 ชม.)
     'lifetime' => (int) env('SESSION_LIFETIME', 120),
 
+    // ถ้า true = ปิด browser แล้ว session หมดอายุ
     'expire_on_close' => env('SESSION_EXPIRE_ON_CLOSE', false),
 
     /*
@@ -41,12 +44,12 @@ return [
     | Session Encryption
     |--------------------------------------------------------------------------
     |
-    | This option allows you to easily specify that all of your session data
-    | should be encrypted before it's stored. All encryption is performed
-    | automatically by Laravel and you may use the session like normal.
+    | ถ้าตั้งเป็น true = ข้อมูล session จะถูกเข้ารหัสก่อนเก็บ
+    | Laravel จะจัดการให้เอง อันนี้เพิ่มความปลอดภัยขึ้นอีกขั้น
     |
     */
 
+    // เข้ารหัส session data หรือไม่ (ค่า default = false)
     'encrypt' => env('SESSION_ENCRYPT', false),
 
     /*
@@ -54,12 +57,12 @@ return [
     | Session File Location
     |--------------------------------------------------------------------------
     |
-    | When utilizing the "file" session driver, the session files are placed
-    | on disk. The default storage location is defined here; however, you
-    | are free to provide another location where they should be stored.
+    | เวลาใช้ driver "file" จะเก็บไฟล์ session ที่โฟลเดอร์นี้
+    | ถ้าไม่ได้ใช้ driver file ค่านี้ก็ไม่ค่อยมีผล
     |
     */
 
+    // โฟลเดอร์เก็บไฟล์ session (เมื่อใช้ driver = file)
     'files' => storage_path('framework/sessions'),
 
     /*
@@ -67,12 +70,12 @@ return [
     | Session Database Connection
     |--------------------------------------------------------------------------
     |
-    | When using the "database" or "redis" session drivers, you may specify a
-    | connection that should be used to manage these sessions. This should
-    | correspond to a connection in your database configuration options.
+    | ถ้าใช้ driver "database" หรือ "redis"
+    | ตรงนี้คือชื่อ connection ที่จะใช้ (ต้องไปตรงกับ config/database.php)
     |
     */
 
+    // ชื่อ connection DB ที่ใช้เก็บ session (ถ้าไม่กำหนดจะใช้ default DB)
     'connection' => env('SESSION_CONNECTION'),
 
     /*
@@ -80,12 +83,12 @@ return [
     | Session Database Table
     |--------------------------------------------------------------------------
     |
-    | When using the "database" session driver, you may specify the table to
-    | be used to store sessions. Of course, a sensible default is defined
-    | for you; however, you're welcome to change this to another table.
+    | ถ้าใช้ driver "database"
+    | กำหนดชื่อตารางที่จะใช้เก็บ session
     |
     */
 
+    // ชื่อตาราง session (default = sessions)
     'table' => env('SESSION_TABLE', 'sessions'),
 
     /*
@@ -93,14 +96,12 @@ return [
     | Session Cache Store
     |--------------------------------------------------------------------------
     |
-    | When using one of the framework's cache driven session backends, you may
-    | define the cache store which should be used to store the session data
-    | between requests. This must match one of your defined cache stores.
-    |
-    | Affects: "dynamodb", "memcached", "redis"
+    | ถ้าใช้ session backend ที่อิง cache (redis / memcached / dynamodb)
+    | ให้บอกว่าต้องใช้ cache store ตัวไหน (ไปตรงกับ config/cache.php)
     |
     */
 
+    // ชื่อ cache store ที่จะใช้เก็บ session (เช่น redis, dynamodb)
     'store' => env('SESSION_STORE'),
 
     /*
@@ -108,9 +109,9 @@ return [
     | Session Sweeping Lottery
     |--------------------------------------------------------------------------
     |
-    | Some session drivers must manually sweep their storage location to get
-    | rid of old sessions from storage. Here are the chances that it will
-    | happen on a given request. By default, the odds are 2 out of 100.
+    | บาง driver ต้องมีการ "เก็บกวาด" session เก่าทิ้งเอง
+    | lottery = โอกาสที่จะ trigger การลบ session เก่าทิ้งต่อ 1 request
+    | [2, 100] = มีโอกาส 2 จาก 100 ครั้ง (2%)
     |
     */
 
@@ -121,9 +122,9 @@ return [
     | Session Cookie Name
     |--------------------------------------------------------------------------
     |
-    | Here you may change the name of the session cookie that is created by
-    | the framework. Typically, you should not need to change this value
-    | since doing so does not grant a meaningful security improvement.
+    | ชื่อ cookie ที่ browser ใช้เก็บ session ID
+    | โดย default จะใช้ชื่อแอปมา slug แล้วต่อด้วย -session
+    | เช่น app ชื่อ "Task Report" → task-report-session
     |
     */
 
@@ -137,9 +138,8 @@ return [
     | Session Cookie Path
     |--------------------------------------------------------------------------
     |
-    | The session cookie path determines the path for which the cookie will
-    | be regarded as available. Typically, this will be the root path of
-    | your application, but you're free to change this when necessary.
+    | path ของ cookie = ใช้กับ URL path ไหนบ้างในเว็บ
+    | ปกติ '/' คือทั้งเว็บ
     |
     */
 
@@ -150,9 +150,8 @@ return [
     | Session Cookie Domain
     |--------------------------------------------------------------------------
     |
-    | This value determines the domain and subdomains the session cookie is
-    | available to. By default, the cookie will be available to the root
-    | domain and all subdomains. Typically, this shouldn't be changed.
+    | domain ที่ cookie ใช้ได้ เช่น .example.com
+    | ถ้าเว้นว่าง = ใช้ domain ปัจจุบัน
     |
     */
 
@@ -163,9 +162,8 @@ return [
     | HTTPS Only Cookies
     |--------------------------------------------------------------------------
     |
-    | By setting this option to true, session cookies will only be sent back
-    | to the server if the browser has a HTTPS connection. This will keep
-    | the cookie from being sent to you when it can't be done securely.
+    | ถ้า true = จะส่ง cookie กลับมาที่ server เฉพาะตอนใช้ HTTPS เท่านั้น
+    | เพิ่มความปลอดภัยเวลารันบน https (production)
     |
     */
 
@@ -176,9 +174,8 @@ return [
     | HTTP Access Only
     |--------------------------------------------------------------------------
     |
-    | Setting this value to true will prevent JavaScript from accessing the
-    | value of the cookie and the cookie will only be accessible through
-    | the HTTP protocol. It's unlikely you should disable this option.
+    | ถ้า true = JavaScript จะอ่านค่า cookie ไม่ได้ (ป้องกัน XSS)
+    | ปกติควรให้ true เสมอ
     |
     */
 
@@ -189,13 +186,12 @@ return [
     | Same-Site Cookies
     |--------------------------------------------------------------------------
     |
-    | This option determines how your cookies behave when cross-site requests
-    | take place, and can be used to mitigate CSRF attacks. By default, we
-    | will set this value to "lax" to permit secure cross-site requests.
+    | คุมพฤติกรรม cookie ตอนมี cross-site request (ป้องกัน CSRF)
     |
-    | See: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#samesitesamesite-value
-    |
-    | Supported: "lax", "strict", "none", null
+    | "lax"   = ปลอดภัย + ยังใช้ได้ในกรณีส่วนใหญ่ (default แนะนำ)
+    | "strict"= เข้มสุด (ส่วนใหญ่ไม่จำเป็น)
+    | "none"  = เปิดให้ cross-site เต็มที่ (ต้องใช้คู่กับ secure)
+    | null    = ไม่ใส่ค่า same-site
     |
     */
 
@@ -206,9 +202,9 @@ return [
     | Partitioned Cookies
     |--------------------------------------------------------------------------
     |
-    | Setting this value to true will tie the cookie to the top-level site for
-    | a cross-site context. Partitioned cookies are accepted by the browser
-    | when flagged "secure" and the Same-Site attribute is set to "none".
+    | ใช้กับเคส cross-site ซับซ้อน (เช่น third-party frames ฯลฯ)
+    | ต้องใช้คู่กับ secure + same_site = "none"
+    | ส่วนใหญ่ในโปรเจกต์ปกติไม่ต้องเปิด
     |
     */
 
