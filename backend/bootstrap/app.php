@@ -38,6 +38,14 @@ return Application::configure(
 
     // ตั้งค่า middleware ส่วนกลางของแอป (ยังไม่ได้ใส่อะไรเพิ่ม)
     ->withMiddleware(function (Middleware $middleware) {
+        $middleware->api(prepend: [
+            \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+        ]);
+
+        $middleware->alias([
+            'verified' => \App\Http\Middleware\EnsureEmailIsVerified::class,
+        ]);
+
         // ตรงนี้เราสามารถเพิ่ม / ปรับกลุ่ม middleware ได้
         // เช่น $middleware->web(...), $middleware->api(...), ฯลฯ
         //

@@ -1,68 +1,80 @@
+/* กำหนดสไตล์พื้นฐานให้ทั้งหน้า ผ่าน :root (เหมือน html) */
 :root {
+  /* ฟอนต์หลักที่ใช้ทั้งเว็บ */
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
+  /* เปิดทั้ง light / dark mode ตามค่า default */
   color-scheme: light dark;
+
+  /* สีตัวอักษรและพื้นหลังโหมด dark เริ่มต้น */
   color: rgba(255, 255, 255, 0.87);
   background-color: #242424;
 
+  /* ปรับการเรนเดอร์ตัวอักษรให้คม ๆ ลื่น ๆ */
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* สไตล์ tag <a> ทุกตัวทั่วหน้า */
 a {
   font-weight: 500;
   color: #646cff;
-  text-decoration: inherit;
+  text-decoration: inherit; /* เอาค่า underline ตาม parent (ส่วนใหญ่คือเอาออก) */
 }
 a:hover {
-  color: #535bf2;
+  color: #535bf2; /* เปลี่ยนสีลิงก์เวลา hover */
 }
 
+/* สไตล์ body ทั้งหน้า */
 body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
+  margin: 0;             /* เอา margin เริ่มต้นของ browser ออก */
+  display: flex;         /* ใช้ flex เพื่อจัด layout */
+  place-items: center;   /* จัดให้อยู่กลางทั้งแนวตั้ง-แนวนอน (เทียบกับ viewport) */
+  min-width: 320px;      /* ไม่ให้แคบเกิน 320px */
+  min-height: 100vh;     /* สูงอย่างน้อยเท่าหน้าจอ (เต็มจอ) */
 }
 
+/* สไตล์หัวข้อ h1 */
 h1 {
   font-size: 3.2em;
   line-height: 1.1;
 }
 
+/* สไตล์ปุ่มมาตรฐาน */
 button {
   border-radius: 8px;
   border: 1px solid transparent;
   padding: 0.6em 1.2em;
   font-size: 1em;
   font-weight: 500;
-  font-family: inherit;
+  font-family: inherit;   /* ใช้ฟอนต์เดียวกับ body */
   background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
+  cursor: pointer;        /* เปลี่ยนเมาส์เป็นรูปมือเมื่อ hover */
+  transition: border-color 0.25s; /* เวลาเปลี่ยนสีเส้นขอบให้ค่อย ๆ เปลี่ยน */
 }
 button:hover {
   border-color: #646cff;
 }
 button:focus,
 button:focus-visible {
+  /* เส้นขอบแสดงโฟกัสสำหรับ accessibility (เช่น กด Tab เลือกปุ่ม) */
   outline: 4px auto -webkit-focus-ring-color;
 }
 
+/* ถ้าระบบผู้ใช้ตั้งให้ใช้ theme แบบ light (โหมดสว่าง) */
 @media (prefers-color-scheme: light) {
   :root {
-    color: #213547;
-    background-color: #ffffff;
+    color: #213547;          /* เปลี่ยนสีตัวอักษรให้เข้มขึ้น */
+    background-color: #ffffff; /* พื้นหลังเป็นสีขาว */
   }
   a:hover {
     color: #747bff;
   }
   button {
-    background-color: #f9f9f9;
+    background-color: #f9f9f9; /* ปุ่มเป็นสีเทาอ่อน */
   }
 }

@@ -10,16 +10,30 @@ class Task extends Model
     use HasFactory;
 
     /**
-     * รายชื่อคอลัมน์ที่อนุญาตให้กรอก/อัปเดตแบบ mass assignment
-     *
-     * ต้องมีอยู่จริงในตาราง tasks:
-     * - title
-     * - detail
-     * - status
+     * ฟิลด์ที่ให้กรอก/แก้ไขผ่าน create() / update()
      */
     protected $fillable = [
         'title',
-        'detail',
-        'status', // ✅ ใช้เก็บ pending / in_progress / completed
+        'detail',    // ↔ คอลัมน์ใน DB
+        'status',    // pending / in_progress / completed
+        'deadline',
+        'priority',  // low / normal / high
     ];
+
+    /**
+     * cast field บางตัวให้เป็น type ที่อ่านง่ายขึ้น
+     */
+    protected $casts = [
+        'deadline'   => 'date',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+    ];
+
+    /**
+     * ความสัมพันธ์: 1 Task มีได้หลาย Comment
+     */
+    public function comments()
+    {
+        return $this->hasMany(TaskComment::class);
+    }
 }

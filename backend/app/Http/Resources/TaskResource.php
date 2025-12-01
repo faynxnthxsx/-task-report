@@ -13,15 +13,21 @@ class TaskResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id'         => $this->id,
-            'title'      => $this->title,
+            'id'       => $this->id,
+            'title'    => $this->title,
 
-            // ✅ เพิ่มฟิลด์ที่ใช้ใน frontend
-            'detail'     => $this->detail,
-            'status'     => $this->status,   // pending / in_progress / completed
+            // ฟิลด์ที่ใช้ใน frontend
+            'detail'   => $this->detail,
+            'status'   => $this->status,      // pending / in_progress / completed
 
-            'created_at' => $this->created_at,
-            'updated_at' => $this->updated_at,
+            // 👇 แก้ตรงนี้: ไม่เรียก ->toDateString() แล้ว
+            'deadline' => $this->deadline ? (string) $this->deadline : null,
+
+            'priority' => $this->priority,
+
+            // เวลา ส่งเป็น string ปลอดภัยด้วย optional()
+            'created_at' => optional($this->created_at)->toDateTimeString(),
+            'updated_at' => optional($this->updated_at)->toDateTimeString(),
         ];
     }
 }
