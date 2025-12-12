@@ -12,17 +12,27 @@ class TaskCommentController extends Controller
      * แสดงคอมเมนต์ทั้งหมดของงานหนึ่งงาน
      * GET /api/tasks/{task}/comments
      */
-    public function index(Request $request, Task $task)
+    public function index(Request $request, $task)
     {
-        $user = $request->user(); // อาจเป็น null ถ้าไม่ login
+        // $task = id (ไม่ใช่ model)
+        $taskModel = Task::find($task);
 
-        $comments = $task->comments()
+        if (! $taskModel) {
+            return response()->json([
+                'message' => 'ไม่พบงาน (task) id = ' . $task,
+            ], 404);
+        }
+
+        $user = $request->user();
+
+        $comments = $taskModel->comments()
             ->with('user')
             ->orderBy('created_at')
             ->get();
 
         $data = $comments->map(function (TaskComment $comment) use ($user) {
-            $text = $comment->body ?? $comment->content ?? '';
+            // 👇 อ่านจากคอลัมน์ body
+            $text = $comment->body ?? '';
 
             $canEdit = false;
             $canDelete = false;
@@ -31,16 +41,10 @@ class TaskCommentController extends Controller
                 $isOwner   = $comment->user_id === $user->id;
                 $isAdmin   = $user->role === 'admin';
                 $isManager = $user->role === 'manager';
-                // $isStaff   = $user->role === 'staff'; // ยังไม่ได้ใช้ตรงนี้ แต่ประกาศไว้ให้ชัดเจนก็ได้
 
                 $canModerate = $isAdmin || $isManager;
 
-                if ($canModerate) {
-                    // admin/manager แก้/ลบได้ทุกคอมเมนต์
-                    $canEdit   = true;
-                    $canDelete = true;
-                } elseif ($isOwner) {
-                    // เจ้าของคอมเมนต์ แก้/ลบของตัวเองได้
+                if ($canModerate || $isOwner) {
                     $canEdit   = true;
                     $canDelete = true;
                 }
@@ -65,8 +69,16 @@ class TaskCommentController extends Controller
      * สร้างคอมเมนต์ใหม่ใต้ Task
      * POST /api/tasks/{task}/comments
      */
-    public function store(Request $request, Task $task)
+    public function store(Request $request, $task)
     {
+        $taskModel = Task::find($task);
+
+        if (! $taskModel) {
+            return response()->json([
+                'message' => 'ไม่พบงาน (task) id = ' . $task,
+            ], 404);
+        }
+
         $data = $request->validate([
             'body'    => ['nullable', 'string'],
             'content' => ['nullable', 'string'],
@@ -82,8 +94,8 @@ class TaskCommentController extends Controller
 
         $user = $request->user();
 
-        $comment = $task->comments()->create([
-            'body'    => $text,
+        $comment = $taskModel->comments()->create([
+            'body'    => $text,         // 👈 เขียนลง body
             'user_id' => $user?->id,
         ]);
 
@@ -121,27 +133,40 @@ class TaskCommentController extends Controller
      * แก้ไขคอมเมนต์
      * PATCH /api/tasks/{task}/comments/{comment}
      */
-    public function update(Request $request, Task $task, TaskComment $comment)
+    public function update(Request $request, $task, $comment)
     {
-        if ($comment->task_id !== $task->id) {
-            abort(404, 'Comment not belongs to this task');
+        $taskModel = Task::find($task);
+
+        if (! $taskModel) {
+            return response()->json([
+                'message' => 'ไม่พบงาน (task) id = ' . $task,
+            ], 404);
+        }
+
+        $commentModel = TaskComment::where('task_id', $task)->find($comment);
+
+        if (! $commentModel) {
+            return response()->json([
+                'message' => 'ไม่พบคอมเมนต์ id = ' . $comment . ' ใน task นี้',
+            ], 404);
         }
 
         $user = $request->user();
 
         if (! $user) {
-            abort(401, 'กรุณาเข้าสู่ระบบ');
+            return response()->json(['message' => 'กรุณาเข้าสู่ระบบ'], 401);
         }
 
-        $isOwner   = $comment->user_id === $user->id;
+        $isOwner   = $commentModel->user_id === $user->id;
         $isAdmin   = $user->role === 'admin';
         $isManager = $user->role === 'manager';
-        // $isStaff   = $user->role === 'staff';
 
         $canModerate = $isAdmin || $isManager;
 
         if (! $canModerate && ! $isOwner) {
-            abort(403, 'คุณไม่มีสิทธิ์แก้ไขคอมเมนต์นี้');
+            return response()->json([
+                'message' => 'คุณไม่มีสิทธิ์แก้ไขคอมเมนต์นี้',
+            ], 403);
         }
 
         $data = $request->validate([
@@ -157,20 +182,20 @@ class TaskCommentController extends Controller
             ], 422);
         }
 
-        $comment->update([
-            'body' => $text,
+        $commentModel->update([
+            'body' => $text,        // 👈 update ที่ body
         ]);
 
         $canEdit   = $canModerate || $isOwner;
         $canDelete = $canModerate || $isOwner;
 
         $response = [
-            'id'          => $comment->id,
+            'id'          => $commentModel->id,
             'body'        => $text,
             'content'     => $text,
-            'user_name'   => optional($comment->user)->name ?? 'ไม่ระบุชื่อ',
-            'user_id'     => $comment->user_id,
-            'created_at'  => $comment->created_at,
+            'user_name'   => optional($commentModel->user)->name ?? 'ไม่ระบุชื่อ',
+            'user_id'     => $commentModel->user_id,
+            'created_at'  => $commentModel->created_at,
             'can_edit'    => $canEdit,
             'can_delete'  => $canDelete,
         ];
@@ -181,34 +206,44 @@ class TaskCommentController extends Controller
     /**
      * ลบคอมเมนต์
      * DELETE /api/tasks/{task}/comments/{comment}
-     *
-     * - admin / manager ลบได้ทุกอัน
-     * - เจ้าของคอมเมนต์ลบของตัวเองได้
      */
-    public function destroy(Request $request, Task $task, TaskComment $comment)
+    public function destroy(Request $request, $task, $comment)
     {
-        if ($comment->task_id !== $task->id) {
-            abort(404, 'Comment not belongs to this task');
+        $taskModel = Task::find($task);
+
+        if (! $taskModel) {
+            return response()->json([
+                'message' => 'ไม่พบงาน (task) id = ' . $task,
+            ], 404);
+        }
+
+        $commentModel = TaskComment::where('task_id', $task)->find($comment);
+
+        if (! $commentModel) {
+            return response()->json([
+                'message' => 'ไม่พบคอมเมนต์ id = ' . $comment . ' ใน task นี้',
+            ], 404);
         }
 
         $user = $request->user();
 
         if (! $user) {
-            abort(401, 'กรุณาเข้าสู่ระบบ');
+            return response()->json(['message' => 'กรุณาเข้าสู่ระบบ'], 401);
         }
 
-        $isOwner   = $comment->user_id === $user->id;
+        $isOwner   = $commentModel->user_id === $user->id;
         $isAdmin   = $user->role === 'admin';
         $isManager = $user->role === 'manager';
-        // $isStaff   = $user->role === 'staff';
 
         $canModerate = $isAdmin || $isManager;
 
         if (! $canModerate && ! $isOwner) {
-            abort(403, 'คุณไม่มีสิทธิ์ลบคอมเมนต์นี้');
+            return response()->json([
+                'message' => 'คุณไม่มีสิทธิ์ลบคอมเมนต์นี้',
+            ], 403);
         }
 
-        $comment->delete();
+        $commentModel->delete();
 
         return response()->json([
             'message' => 'ลบคอมเมนต์เรียบร้อยแล้ว',

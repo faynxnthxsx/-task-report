@@ -4,30 +4,25 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Task;
+use App\Models\User;
 
 class TaskComment extends Model
 {
     use HasFactory;
 
-    protected $table = 'task_comments';
-
+    // 👇 ให้ตรงกับชื่อคอลัมน์ในตาราง task_comments
     protected $fillable = [
         'task_id',
         'user_id',
-        'body',
+        'body',   // ใช้ body เป็นหลัก
     ];
 
-    /**
-     * คอมเมนต์นี้อยู่ใต้ Task ไหน
-     */
     public function task()
     {
         return $this->belongsTo(Task::class);
     }
 
-    /**
-     * คนที่เขียนคอมเมนต์ (user)
-     */
     public function user()
     {
         return $this->belongsTo(User::class);

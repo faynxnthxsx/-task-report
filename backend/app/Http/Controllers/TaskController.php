@@ -3,168 +3,147 @@
 namespace App\Http\Controllers;
 
 use App\Models\Task;
-use Illuminate\Http\Request;
 use App\Http\Resources\TaskResource;
+use Illuminate\Http\Request;
 
 class TaskController extends Controller
 {
     /**
-     * แสดงรายการงานทั้งหมด
+     * แสดงรายการงานทั้งหมด (ตามสิทธิ์ + filter)
      * GET /api/tasks
      */
     public function index(Request $request)
-{
-    $query = Task::query();
+    {
+        $user = $request->user();
 
-    // ⭐ 1) Filter by status: /api/tasks?status=pending
-    $status = $request->query('status'); // all / pending / in_progress / completed
+        $query = Task::query();
 
-    if ($status && $status !== 'all') {
-        // กันคนส่ง status มั่ว ๆ เข้ามา
-        $allowedStatuses = ['pending', 'in_progress', 'completed'];
+        // ถ้าเป็น staff เห็นได้เฉพาะงานของตัวเอง
+        if ($user->role === 'staff') {
+            $query->where('assigned_to', $user->id);
+        }
 
-        if (in_array($status, $allowedStatuses, true)) {
+        // filter ตาม status / priority / assigned_to (สำหรับ admin/manager)
+        if ($status = $request->query('status')) {
             $query->where('status', $status);
         }
+
+        if ($priority = $request->query('priority')) {
+            $query->where('priority', $priority);
+        }
+
+        if ($assigned = $request->query('assigned_to')) {
+            $query->where('assigned_to', $assigned);
+        }
+
+        // sort (default: created_at desc)
+        $sortBy  = $request->query('sort_by', 'created_at');
+        $sortDir = $request->query('sort_dir', 'desc');
+
+        if (! in_array($sortBy, ['created_at', 'deadline', 'priority', 'status'])) {
+            $sortBy = 'created_at';
+        }
+        if (! in_array($sortDir, ['asc', 'desc'])) {
+            $sortDir = 'desc';
+        }
+
+        $query->orderBy($sortBy, $sortDir);
+
+        $tasks = $query->get();
+
+        return TaskResource::collection($tasks);
     }
 
-    // ⭐ 2) Filter by date range (ใช้ created_at เป็นหลัก)
-    // รูปแบบวันที่ที่ส่งมาแนะนำเป็น YYYY-MM-DD
-    $from = $request->query('from'); // เช่น 2025-11-01
-    $to   = $request->query('to');   // เช่น 2025-11-30
-
-    if ($from) {
-        $query->whereDate('created_at', '>=', $from);
-    }
-
-    if ($to) {
-        $query->whereDate('created_at', '<=', $to);
-    }
-
-    // ⭐ 3) Sort (เหมือนของเดิม)
-    // ?sort=latest → ใหม่สุดอยู่บน
-    $sort = $request->query('sort');
-
-    if ($sort === 'latest') {
-        $query->orderBy('created_at', 'desc');
-    } else {
-        // default: เก่าสุดอยู่บน
-        $query->orderBy('created_at', 'asc');
-    }
-
-    // ดึงรายการงานทั้งหมดตามเงื่อนไขด้านบน
-    $tasks = $query->get();
-
-    // ส่งออกผ่าน Resource เหมือนเดิม
-    return TaskResource::collection($tasks);
-}
     /**
      * สร้างงานใหม่
      * POST /api/tasks
-     * (เฉพาะ admin / manager)
      */
     public function store(Request $request)
     {
         $user = $request->user();
 
-        if (! $user || ! in_array($user->role, ['admin', 'manager'], true)) {
-            abort(403, 'คุณไม่มีสิทธิ์สร้างงาน');
-        }
-
         $data = $request->validate([
-            'title'    => ['required', 'string', 'max:255'],
-            'detail'   => ['nullable', 'string'],
-            'status'   => ['nullable', 'in:pending,in_progress,completed'],
-            'deadline' => ['nullable', 'date'],
-            'priority' => ['nullable', 'in:low,normal,high'],
+            'title'       => ['required', 'string', 'max:255'],
+            'detail'      => ['nullable', 'string'],
+            'status'      => ['required', 'in:pending,in_progress,completed'],
+            'deadline'    => ['nullable', 'date'],
+            'priority'    => ['required', 'in:low,normal,high'],
+            'assigned_to' => ['required', 'exists:users,id'],
         ]);
 
-        // ค่า default
-        if (! isset($data['status'])) {
-            $data['status'] = 'pending';
-        }
-        if (! isset($data['priority'])) {
-            $data['priority'] = 'normal';
+        // ถ้าเป็น staff ให้บังคับว่าต้อง assign ให้ตัวเองเท่านั้น
+        if ($user->role === 'staff') {
+            $data['assigned_to'] = $user->id;
         }
 
         $task = Task::create($data);
 
-        return response()->json(TaskResource::make($task), 201);
+        return new TaskResource($task);
     }
 
     /**
-     * ดูรายละเอียดงานหนึ่งงาน
+     * แสดงงานทีละตัว
      * GET /api/tasks/{task}
      */
-    public function show(Task $task)
+    public function show(Request $request, Task $task)
     {
-        return TaskResource::make($task);
+        $user = $request->user();
+
+        // staff เห็นได้เฉพาะงานของตัวเอง
+        if ($user->role === 'staff' && $task->assigned_to !== $user->id) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        return new TaskResource($task);
     }
 
     /**
-     * แก้ไขงาน
-     * PUT/PATCH /api/tasks/{task}
-     *
-     * - admin / manager แก้ได้ทุก field
-     * - staff แก้ได้เฉพาะ status (pending / in_progress / completed)
+     * แก้งาน
+     * PUT /api/tasks/{task}
      */
     public function update(Request $request, Task $task)
     {
         $user = $request->user();
 
-        if (! $user) {
-            abort(401, 'กรุณาเข้าสู่ระบบ');
+        // staff ห้ามแก้งานของคนอื่น
+        if ($user->role === 'staff' && $task->assigned_to !== $user->id) {
+            return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        // admin / manager -> full access
-        if (in_array($user->role, ['admin', 'manager'], true)) {
-            $data = $request->validate([
-                'title'    => ['sometimes', 'required', 'string', 'max:255'],
-                'detail'   => ['nullable', 'string'],
-                'status'   => ['sometimes', 'required', 'in:pending,in_progress,completed'],
-                'deadline' => ['nullable', 'date'],
-                'priority' => ['nullable', 'in:low,normal,high'],
-            ]);
+        $data = $request->validate([
+            'title'       => ['required', 'string', 'max:255'],
+            'detail'      => ['nullable', 'string'],
+            'status'      => ['required', 'in:pending,in_progress,completed'],
+            'deadline'    => ['nullable', 'date'],
+            'priority'    => ['required', 'in:low,normal,high'],
+            'assigned_to' => ['required', 'exists:users,id'],
+        ]);
 
-            $task->update($data);
-
-            return TaskResource::make($task);
-        }
-
-        // staff -> อนุญาตให้เปลี่ยนได้แค่ status
+        // staff ยังแก้ assigned_to คนอื่นไม่ได้
         if ($user->role === 'staff') {
-            $data = $request->validate([
-                'status' => ['required', 'in:pending,in_progress,completed'],
-            ]);
-
-            $task->update([
-                'status' => $data['status'],
-            ]);
-
-            return TaskResource::make($task);
+            $data['assigned_to'] = $user->id;
         }
 
-        // role อื่น ๆ ไม่อนุญาต
-        abort(403, 'คุณไม่มีสิทธิ์แก้ไขงานนี้');
+        $task->update($data);
+
+        return new TaskResource($task);
     }
 
     /**
      * ลบงาน
      * DELETE /api/tasks/{task}
-     * (เฉพาะ admin)
      */
     public function destroy(Request $request, Task $task)
     {
         $user = $request->user();
 
-        if (! $user || $user->role !== 'admin') {
-            abort(403, 'คุณไม่มีสิทธิ์ลบงาน');
+        // staff ห้ามลบงาน
+        if ($user->role === 'staff') {
+            return response()->json(['message' => 'Forbidden'], 403);
         }
 
         $task->delete();
 
-        return response()->json([
-            'message' => 'ลบงานเรียบร้อยแล้ว',
-        ]);
+        return response()->json(['message' => 'Deleted'], 200);
     }
 }

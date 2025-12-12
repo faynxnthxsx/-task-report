@@ -4,33 +4,45 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\User;
+use App\Models\TaskComment;
+
 
 class Task extends Model
 {
     use HasFactory;
 
     /**
-     * ฟิลด์ที่ให้กรอก/แก้ไขผ่าน create() / update()
+     * ฟิลด์ที่อนุญาตให้ fill ผ่าน create()/update()
      */
     protected $fillable = [
         'title',
-        'detail',    // ↔ คอลัมน์ใน DB
-        'status',    // pending / in_progress / completed
+        'detail',
+        'status',
         'deadline',
-        'priority',  // low / normal / high
+        'priority',
+        'assigned_to',
+        'created_by',
     ];
 
     /**
-     * cast field บางตัวให้เป็น type ที่อ่านง่ายขึ้น
+     * ผู้สร้างงาน (admin / manager ที่กดสร้าง)
      */
-    protected $casts = [
-        'deadline'   => 'date',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
-    ];
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
 
     /**
-     * ความสัมพันธ์: 1 Task มีได้หลาย Comment
+     * ผู้รับผิดชอบงาน (staff / manager ที่ถูก assign)
+     */
+    public function assignee()
+    {
+        return $this->belongsTo(User::class, 'assigned_to');
+    }
+
+    /**
+     * คอมเมนต์ใต้ Task นี้ทั้งหมด
      */
     public function comments()
     {

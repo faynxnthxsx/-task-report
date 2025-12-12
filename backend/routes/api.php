@@ -3,14 +3,15 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
+
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\TaskCommentController;
+use App\Http\Controllers\ReportController;
 
 /*
 |--------------------------------------------------------------------------
 | API Routes
 |--------------------------------------------------------------------------
-| prefix ทั้งหมดเป็น /api/ โดยอัตโนมัติ
 */
 
 Route::get('/health', function () {
@@ -18,9 +19,7 @@ Route::get('/health', function () {
 });
 
 /**
- * API Login (ใช้ Sanctum token)
- *
- * POST /api/login
+ * API Login
  */
 Route::post('/login', function (Request $request) {
     $credentials = $request->validate([
@@ -35,8 +34,8 @@ Route::post('/login', function (Request $request) {
     /** @var \App\Models\User $user */
     $user = $request->user();
 
-    // ลบ token เก่าทิ้งให้เหลืออันล่าสุดอันเดียว
-    $user->tokens()->delete();
+    // ตอน dev ยังไม่ลบ token เก่า ปล่อยให้มีหลาย token ได้
+    // $user->tokens()->delete();
 
     $token = $user->createToken('task-report')->plainTextToken;
 
@@ -52,26 +51,23 @@ Route::post('/login', function (Request $request) {
 });
 
 /**
- * ส่วนที่ต้อง login ด้วย Sanctum
- * (Dashboard, Tasks CRUD, Comments)
+ * Protected Routes (ต้อง login)
  */
 Route::middleware('auth:sanctum')->group(function () {
+
     Route::get('/me', function (Request $request) {
         return $request->user();
     });
 
-    // ✅ Tasks CRUD
+    // Tasks CRUD
     Route::apiResource('tasks', TaskController::class);
 
-    // ✅ Comments ใต้ Task (ต้องมี token ถึงจะรู้ว่าใครเป็นคนคอมเมนต์ + เช็ค admin ลบได้)
-   /**
- * ⭐ คอมเมนต์ใต้ Task
- * ไม่บังคับ auth ที่ route แต่ใน controller จะเช็กสิทธิ์เอง
- */
-Route::get('/tasks/{task}/comments', [TaskCommentController::class, 'index']);
-Route::post('/tasks/{task}/comments', [TaskCommentController::class, 'store']);
-Route::patch('/tasks/{task}/comments/{comment}', [TaskCommentController::class, 'update']);
-Route::put('/tasks/{task}/comments/{comment}', [TaskCommentController::class, 'update']);
-Route::delete('/tasks/{task}/comments/{comment}', [TaskCommentController::class, 'destroy']);
+    // ✅ Task Comments
+    Route::get   ('/tasks/{task}/comments', [TaskCommentController::class, 'index']);
+    Route::post  ('/tasks/{task}/comments', [TaskCommentController::class, 'store']);
+    Route::patch ('/tasks/{task}/comments/{comment}', [TaskCommentController::class, 'update']);
+    Route::delete('/tasks/{task}/comments/{comment}', [TaskCommentController::class, 'destroy']);
 
+    // Reports
+    Route::get('/reports/summary', [ReportController::class, 'summary']);
 });
