@@ -16,8 +16,9 @@ import Tasks from "./pages/Tasks";
 import Reports from "./pages/Reports";
 import LoginPage from "./pages/Login";
 import TaskDetailPage from "./pages/TaskDetail";
+import UsersPage from "./pages/Users";
 
-import { setApiToken } from "./lib/api";
+import { setApiToken, loadAuthTokenFromStorage } from "./lib/api";
 
 export default function App() {
   return (
@@ -41,6 +42,11 @@ function MainLayout() {
 
   const hasToken = !!localStorage.getItem("taskreport_token");
 
+  // ⭐ ตอนเปิดแอป / รีเฟรชหน้า ให้โหลด token จาก localStorage ใส่ Axios
+  useEffect(() => {
+    loadAuthTokenFromStorage();
+  }, []);
+
   // เวลารีเฟรชหน้าให้ sync user อีกรอบ เผื่อ localStorage เปลี่ยน
   useEffect(() => {
     try {
@@ -54,6 +60,7 @@ function MainLayout() {
   const handleLogout = () => {
     setApiToken(null);
     localStorage.removeItem("taskreport_user");
+    localStorage.removeItem("taskreport_token");
     setCurrentUser(null);
     navigate("/login", { replace: true });
   };
@@ -80,24 +87,33 @@ function MainLayout() {
           }}
         >
           <nav style={{ display: "flex", gap: "1rem" }}>
-            <Link
-              to="/"
-              style={{ color: "#e5e7eb", textDecoration: "none" }}
-            >
+            <Link to="/" style={{ color: "#e5e7eb", textDecoration: "none" }}>
               Dashboard
             </Link>
+
             <Link
               to="/tasks"
               style={{ color: "#e5e7eb", textDecoration: "none" }}
             >
               Tasks
             </Link>
+
             <Link
               to="/reports"
               style={{ color: "#e5e7eb", textDecoration: "none" }}
             >
               Reports
             </Link>
+
+            {/* ✅ Users (โชว์เฉพาะ admin) */}
+            {currentUser?.role === "admin" && (
+              <Link
+                to="/users"
+                style={{ color: "#e5e7eb", textDecoration: "none" }}
+              >
+                Users
+              </Link>
+            )}
           </nav>
 
           <div
@@ -146,13 +162,7 @@ function MainLayout() {
           {/* / ถ้ามี token แสดง Dashboard ถ้าไม่มีก็เด้งไป login */}
           <Route
             path="/"
-            element={
-              hasToken ? (
-                <Dashboard />
-              ) : (
-                <Navigate to="/login" replace />
-              )
-            }
+            element={hasToken ? <Dashboard /> : <Navigate to="/login" replace />}
           />
 
           {/* ต้องล็อกอินก่อนถึงเข้าได้ */}
@@ -179,6 +189,16 @@ function MainLayout() {
             element={
               <RequireAuth>
                 <Reports />
+              </RequireAuth>
+            }
+          />
+
+          {/* ✅ User Management UI */}
+          <Route
+            path="/users"
+            element={
+              <RequireAuth>
+                <UsersPage />
               </RequireAuth>
             }
           />

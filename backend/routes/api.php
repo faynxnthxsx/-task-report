@@ -2,40 +2,38 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use App\Models\User;
 
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\TaskCommentController;
+use App\Http\Controllers\TaskTagController;
 use App\Http\Controllers\ReportController;
-
-/*
-|--------------------------------------------------------------------------
-| API Routes
-|--------------------------------------------------------------------------
-*/
+use App\Http\Controllers\UserController;
 
 Route::get('/health', function () {
     return ['status' => 'ok'];
 });
 
+// ✅ ใช้เช็คว่า routes/api.php ถูกโหลดจริงไหม
+Route::get('/ping', function () {
+    return ['pong' => true];
+});
+
 /**
- * API Login
+ * POST /api/login
  */
 Route::post('/login', function (Request $request) {
-    $credentials = $request->validate([
+    $data = $request->validate([
         'email'    => ['required', 'email'],
         'password' => ['required'],
     ]);
 
-    if (! Auth::attempt($credentials)) {
+    $user = User::where('email', $data['email'])->first();
+
+    if (! $user || ! Hash::check($data['password'], $user->password)) {
         return response()->json(['message' => 'Invalid credentials'], 401);
     }
-
-    /** @var \App\Models\User $user */
-    $user = $request->user();
-
-    // ตอน dev ยังไม่ลบ token เก่า ปล่อยให้มีหลาย token ได้
-    // $user->tokens()->delete();
 
     $token = $user->createToken('task-report')->plainTextToken;
 
@@ -50,16 +48,13 @@ Route::post('/login', function (Request $request) {
     ]);
 });
 
-/**
- * Protected Routes (ต้อง login)
- */
 Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/me', function (Request $request) {
         return $request->user();
     });
 
-    // Tasks CRUD
+    // ✅ Tasks CRUD
     Route::apiResource('tasks', TaskController::class);
 
     // ✅ Task Comments
@@ -68,6 +63,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch ('/tasks/{task}/comments/{comment}', [TaskCommentController::class, 'update']);
     Route::delete('/tasks/{task}/comments/{comment}', [TaskCommentController::class, 'destroy']);
 
-    // Reports
+    // ✅ Task Tags
+    Route::get   ('/tasks/{task}/tags', [TaskTagController::class, 'index']);
+    Route::post  ('/tasks/{task}/tags', [TaskTagController::class, 'store']);
+    Route::delete('/tasks/{task}/tags/{tag}', [TaskTagController::class, 'destroy']);
+
+    // ✅ Reports
     Route::get('/reports/summary', [ReportController::class, 'summary']);
+
+    // ✅ Users (Admin only)
+    Route::get('/users', [UserController::class, 'index']);
+    Route::patch('/users/{user}/role', [UserController::class, 'updateRole']);
+
 });

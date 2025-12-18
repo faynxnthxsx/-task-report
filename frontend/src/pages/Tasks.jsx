@@ -1,5 +1,5 @@
 // frontend/src/pages/Tasks.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 
@@ -16,9 +16,23 @@ export default function TasksPage() {
     }
   });
 
+  // ✅ admin / manager / staff สร้างงานได้
   const canCreateOrEdit =
-    currentUser && (currentUser.role === "admin" || currentUser.role === "manager");
-  const canDelete = currentUser && currentUser.role === "admin";
+    !!currentUser &&
+    (currentUser.role === "admin" ||
+      currentUser.role === "manager" ||
+      currentUser.role === "staff");
+
+  // ✅ ลบงานได้: admin/manager ลบได้ทุกงาน, staff ลบได้เฉพาะงานตัวเอง
+  const canDelete =
+    !!currentUser &&
+    (currentUser.role === "admin" ||
+      currentUser.role === "manager" ||
+      currentUser.role === "staff");
+
+  // ✅ ดู tags ได้ไหม (ตอนนี้ staff ยิง /tags แล้ว 403)
+  const canViewTags =
+    !!currentUser && (currentUser.role === "admin" || currentUser.role === "manager");
 
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,6 +52,26 @@ export default function TasksPage() {
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [sortBy, setSortBy] = useState("latest");
 
+  // ✅ Tag map (taskId -> tags[])
+  const [tagsByTaskId, setTagsByTaskId] = useState({});
+  const [tagsLoadingByTaskId, setTagsLoadingByTaskId] = useState({});
+
+  // ✅ แปลง sort ของหน้า UI -> ให้ตรงกับ backend (sort_by / sort_dir)
+  const toBackendSort = (uiSort) => {
+    switch (uiSort) {
+      case "latest":
+        return { sort_by: "created_at", sort_dir: "desc" };
+      case "oldest":
+        return { sort_by: "created_at", sort_dir: "asc" };
+      case "deadline_asc":
+        return { sort_by: "deadline", sort_dir: "asc" };
+      case "deadline_desc":
+        return { sort_by: "deadline", sort_dir: "desc" };
+      default:
+        return { sort_by: "created_at", sort_dir: "desc" };
+    }
+  };
+
   // โหลดรายการงาน (ตาม filter/search/sort)
   useEffect(() => {
     const fetchTasks = async () => {
@@ -45,21 +79,30 @@ export default function TasksPage() {
       setError("");
 
       try {
+        const { sort_by, sort_dir } = toBackendSort(sortBy);
+
         const res = await api.get("/tasks", {
           params: {
+            // NOTE: backend ตอนนี้ไม่ได้ใช้ q แต่ส่งไปก็ไม่พัง
             q: searchText || undefined,
             status: statusFilter !== "all" ? statusFilter : undefined,
-            priority: priorityFilter !== "all" ? priorityFilter : undefined, // ⭐ เพิ่มตรงนี้
-            sort: sortBy,
+            priority: priorityFilter !== "all" ? priorityFilter : undefined,
+            sort_by,
+            sort_dir,
           },
         });
 
         const data = res.data.data ?? res.data;
-        setTasks(Array.isArray(data) ? data : []);
+        const list = Array.isArray(data) ? data : [];
+
+        // ✅ reset tag cache ก่อน setTasks (กันค้าง/ไม่โหลด)
+        setTagsByTaskId({});
+        setTagsLoadingByTaskId({});
+
+        setTasks(list);
       } catch (err) {
         console.error("โหลด tasks ไม่สำเร็จ", err);
-        const msg =
-          err.response?.data?.message || "ไม่สามารถโหลดรายการงานได้";
+        const msg = err.response?.data?.message || "ไม่สามารถโหลดรายการงานได้";
         setError(msg);
       } finally {
         setLoading(false);
@@ -69,24 +112,77 @@ export default function TasksPage() {
     fetchTasks();
   }, [searchText, statusFilter, priorityFilter, sortBy]);
 
-  const handleCreateTask = async (e) => {
-    e.preventDefault();
-    if (!canCreateOrEdit) {
-      alert("คุณไม่มีสิทธิ์สร้างงาน (ต้องเป็น admin หรือ manager)");
+  // ✅ โหลด tags ของแต่ละ task (MVP: แสดงใน list)
+  useEffect(() => {
+    if (!tasks || tasks.length === 0) return;
+
+    // ✅ staff โดน 403 -> ไม่ต้องยิงโหลด tags
+    if (!canViewTags) {
+      // ใส่เป็น [] เพื่อให้ UI แสดง "ไม่มี" แบบนิ่งๆ
+      const next = {};
+      tasks.forEach((t) => {
+        if (t?.id) next[t.id] = [];
+      });
+      setTagsByTaskId(next);
+      setTagsLoadingByTaskId({});
       return;
     }
+
+    const fetchTagsForTask = async (taskId) => {
+      if (tagsByTaskId[taskId]) return;
+      if (tagsLoadingByTaskId[taskId]) return;
+
+      setTagsLoadingByTaskId((prev) => ({ ...prev, [taskId]: true }));
+
+      try {
+        const res = await api.get(`/tasks/${taskId}/tags`);
+        const tags = res.data?.tags ?? res.data;
+        setTagsByTaskId((prev) => ({
+          ...prev,
+          [taskId]: Array.isArray(tags) ? tags : [],
+        }));
+      } catch (err) {
+        // ถ้าโดน 403 ก็ทำเป็นไม่มี tag ไปเลย (ไม่ให้หน้าแดง/ไม่ให้ UI พัง)
+        if (err.response?.status === 403) {
+          setTagsByTaskId((prev) => ({ ...prev, [taskId]: [] }));
+          return;
+        }
+
+        console.error(`โหลด tags ของ task ${taskId} ไม่สำเร็จ`, err);
+        setTagsByTaskId((prev) => ({ ...prev, [taskId]: [] }));
+      } finally {
+        setTagsLoadingByTaskId((prev) => ({ ...prev, [taskId]: false }));
+      }
+    };
+
+    tasks.forEach((t) => {
+      if (t?.id) fetchTagsForTask(t.id);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks, canViewTags]);
+
+  const handleCreateTask = async (e) => {
+    e.preventDefault();
+
+    if (!canCreateOrEdit) {
+      alert("กรุณาเข้าสู่ระบบก่อนสร้างงาน");
+      return;
+    }
+
     if (!title.trim()) return;
 
     setSubmitting(true);
     setError("");
 
     try {
+      // ✅ ให้ตรงกับ DB/Backend ของโปรเจคนี้: ใช้ assigned_to
       const payload = {
         title,
         detail,
         status,
         priority,
         deadline: deadline || null,
+        assigned_to: currentUser?.id,
       };
 
       const res = await api.post("/tasks", payload);
@@ -94,6 +190,7 @@ export default function TasksPage() {
 
       setTasks((prev) => [newTask, ...prev]);
 
+      // reset form
       setTitle("");
       setDetail("");
       setStatus("pending");
@@ -101,35 +198,52 @@ export default function TasksPage() {
       setDeadline("");
     } catch (err) {
       console.error("สร้างงานใหม่ไม่สำเร็จ", err);
+
+      const errors = err.response?.data?.errors;
       const msg =
-        err.response?.data?.message || "สร้างงานใหม่ไม่สำเร็จ";
+        err.response?.data?.message ||
+        (errors
+          ? Object.values(errors).flat().join(" | ")
+          : "สร้างงานใหม่ไม่สำเร็จ");
+
       setError(msg);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleDeleteTask = async (taskId) => {
+  const handleDeleteTask = async (task) => {
     if (!canDelete) {
-      alert("ลบงานได้เฉพาะ admin เท่านั้น");
+      alert("กรุณาเข้าสู่ระบบก่อนลบงาน");
+      return;
+    }
+
+    // ✅ staff ลบได้เฉพาะงานตัวเอง (ใช้ assigned_to)
+    if (currentUser?.role === "staff" && task.assigned_to !== currentUser?.id) {
+      alert("คุณไม่มีสิทธิ์ลบงานของคนอื่น");
       return;
     }
 
     if (!window.confirm("ต้องการลบงานนี้จริงหรือไม่?")) return;
 
     try {
-      await api.delete(`/tasks/${taskId}`);
-      setTasks((prev) => prev.filter((t) => t.id !== taskId));
+      await api.delete(`/tasks/${task.id}`);
+      setTasks((prev) => prev.filter((t) => t.id !== task.id));
+
+      setTagsByTaskId((prev) => {
+        const next = { ...prev };
+        delete next[task.id];
+        return next;
+      });
     } catch (err) {
       console.error("ลบงานไม่สำเร็จ", err);
-      const msg =
-        err.response?.data?.message || "ลบงานไม่สำเร็จ (อาจไม่มีสิทธิ์)";
+      const msg = err.response?.data?.message || "ลบงานไม่สำเร็จ (อาจไม่มีสิทธิ์)";
       alert(msg);
     }
   };
 
-  const renderStatus = (status) => {
-    switch (status) {
+  const renderStatus = (statusValue) => {
+    switch (statusValue) {
       case "pending":
         return "ค้างอยู่";
       case "in_progress":
@@ -137,12 +251,12 @@ export default function TasksPage() {
       case "completed":
         return "ทำเสร็จแล้ว";
       default:
-        return status || "-";
+        return statusValue || "-";
     }
   };
 
-  const renderPriority = (priority) => {
-    switch (priority) {
+  const renderPriority = (priorityValue) => {
+    switch (priorityValue) {
       case "high":
         return "สูง";
       case "normal":
@@ -150,9 +264,19 @@ export default function TasksPage() {
       case "low":
         return "ต่ำ";
       default:
-        return priority || "-";
+        return priorityValue || "-";
     }
   };
+
+  const tagChipStyle = useMemo(
+    () => ({
+      padding: "3px 8px",
+      borderRadius: "999px",
+      border: "1px solid rgba(148,163,184,0.7)",
+      backgroundColor: "#111827",
+    }),
+    []
+  );
 
   return (
     <div
@@ -195,19 +319,10 @@ export default function TasksPage() {
               marginBottom: "8px",
             }}
           >
-            <h2
-              style={{
-                fontSize: "18px",
-                fontWeight: 600,
-              }}
-            >
-              สร้างงานใหม่
-            </h2>
-            {!canCreateOrEdit && (
-              <span style={{ fontSize: "11px", color: "#fbbf24" }}>
-                * สร้างงานได้เฉพาะ admin / manager
-              </span>
-            )}
+            <h2 style={{ fontSize: "18px", fontWeight: 600 }}>สร้างงานใหม่</h2>
+            <span style={{ fontSize: "11px", color: "#fbbf24" }}>
+              * admin / manager สร้างงานให้ใครก็ได้, staff สร้างงานของตัวเองได้
+            </span>
           </div>
 
           {error && (
@@ -227,13 +342,7 @@ export default function TasksPage() {
 
           <form onSubmit={handleCreateTask}>
             <div style={{ marginBottom: "10px" }}>
-              <label
-                style={{
-                  display: "block",
-                  fontSize: "14px",
-                  marginBottom: "4px",
-                }}
-              >
+              <label style={{ display: "block", fontSize: "14px", marginBottom: "4px" }}>
                 หัวข้องาน
               </label>
               <input
@@ -254,13 +363,7 @@ export default function TasksPage() {
             </div>
 
             <div style={{ marginBottom: "10px" }}>
-              <label
-                style={{
-                  display: "block",
-                  fontSize: "14px",
-                  marginBottom: "4px",
-                }}
-              >
+              <label style={{ display: "block", fontSize: "14px", marginBottom: "4px" }}>
                 รายละเอียด
               </label>
               <textarea
@@ -290,13 +393,7 @@ export default function TasksPage() {
               }}
             >
               <div style={{ minWidth: "140px" }}>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    marginBottom: "4px",
-                  }}
-                >
+                <label style={{ display: "block", fontSize: "14px", marginBottom: "4px" }}>
                   สถานะ
                 </label>
                 <select
@@ -320,13 +417,7 @@ export default function TasksPage() {
               </div>
 
               <div style={{ minWidth: "140px" }}>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    marginBottom: "4px",
-                  }}
-                >
+                <label style={{ display: "block", fontSize: "14px", marginBottom: "4px" }}>
                   ความสำคัญ
                 </label>
                 <select
@@ -350,13 +441,7 @@ export default function TasksPage() {
               </div>
 
               <div style={{ minWidth: "180px" }}>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    marginBottom: "4px",
-                  }}
-                >
+                <label style={{ display: "block", fontSize: "14px", marginBottom: "4px" }}>
                   กำหนดส่ง
                 </label>
                 <input
@@ -391,8 +476,7 @@ export default function TasksPage() {
                 color: "#fff",
                 fontSize: "14px",
                 fontWeight: 600,
-                cursor:
-                  submitting || !canCreateOrEdit ? "not-allowed" : "pointer",
+                cursor: submitting || !canCreateOrEdit ? "not-allowed" : "pointer",
               }}
             >
               {submitting ? "กำลังบันทึก..." : "บันทึกงาน"}
@@ -409,13 +493,7 @@ export default function TasksPage() {
             border: "1px solid rgba(31,41,55,0.9)",
           }}
         >
-          <h2
-            style={{
-              fontSize: "18px",
-              fontWeight: 600,
-              marginBottom: "12px",
-            }}
-          >
+          <h2 style={{ fontSize: "18px", fontWeight: 600, marginBottom: "12px" }}>
             รายการงานทั้งหมด
           </h2>
 
@@ -509,139 +587,114 @@ export default function TasksPage() {
             <p style={{ color: "#6b7280" }}>ยังไม่มีงานในระบบ</p>
           )}
 
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "10px" }}
-          >
-            {tasks.map((task) => (
-              <div
-                key={task.id}
-                style={{
-                  padding: "12px 14px",
-                  borderRadius: "12px",
-                  border: "1px solid #1f2937",
-                  backgroundColor: "#020617",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: "12px",
-                  alignItems: "flex-start",
-                }}
-              >
-                <div>
-                  <div
-                    style={{
-                      fontSize: "15px",
-                      fontWeight: 600,
-                      marginBottom: "4px",
-                    }}
-                  >
-                    {task.title}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "13px",
-                      color: "#9ca3af",
-                      marginBottom: "6px",
-                    }}
-                  >
-                    {task.detail || "— ไม่มีรายละเอียด —"}
-                  </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            {tasks.map((task) => {
+              const canDeleteThisTask =
+                !!currentUser &&
+                (currentUser.role === "admin" ||
+                  currentUser.role === "manager" ||
+                  (currentUser.role === "staff" && task.assigned_to === currentUser.id));
 
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: "6px",
-                      fontSize: "12px",
-                    }}
-                  >
-                    <span
-                      style={{
-                        padding: "3px 8px",
-                        borderRadius: "999px",
-                        border: "1px solid rgba(148,163,184,0.7)",
-                        backgroundColor: "#111827",
-                      }}
-                    >
-                      สถานะ: {renderStatus(task.status)}
-                    </span>
-                    <span
-                      style={{
-                        padding: "3px 8px",
-                        borderRadius: "999px",
-                        border: "1px solid rgba(148,163,184,0.7)",
-                        backgroundColor: "#111827",
-                      }}
-                    >
-                      ความสำคัญ: {renderPriority(task.priority)}
-                    </span>
-                    <span
-                      style={{
-                        padding: "3px 8px",
-                        borderRadius: "999px",
-                        border: "1px solid rgba(148,163,184,0.7)",
-                        backgroundColor: "#111827",
-                      }}
-                    >
-                      กำหนดส่ง:{" "}
-                      {task.deadline ? task.deadline : "ยังไม่กำหนด"}
-                    </span>
-                  </div>
+              const tags = tagsByTaskId[task.id];
+              const tagsLoading = !!tagsLoadingByTaskId[task.id];
 
-                  <div
-                    style={{
-                      marginTop: "6px",
-                      fontSize: "11px",
-                      color: "#6b7280",
-                    }}
-                  >
-                    สร้างเมื่อ: {task.created_at || "-"}
-                  </div>
-                </div>
-
+              return (
                 <div
+                  key={task.id}
                   style={{
+                    padding: "12px 14px",
+                    borderRadius: "12px",
+                    border: "1px solid #1f2937",
+                    backgroundColor: "#020617",
                     display: "flex",
-                    flexDirection: "column",
-                    gap: "6px",
+                    justifyContent: "space-between",
+                    gap: "12px",
+                    alignItems: "flex-start",
                   }}
                 >
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/tasks/${task.id}`)}
-                    style={{
-                      fontSize: "12px",
-                      padding: "6px 10px",
-                      borderRadius: "999px",
-                      border: "1px solid rgba(148,163,184,0.8)",
-                      backgroundColor: "transparent",
-                      color: "#e5e7eb",
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    ดูรายละเอียด
-                  </button>
+                  <div>
+                    <div style={{ fontSize: "15px", fontWeight: 600, marginBottom: "4px" }}>
+                      {task.title}
+                    </div>
 
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteTask(task.id)}
-                    disabled={!canDelete}
-                    style={{
-                      fontSize: "12px",
-                      padding: "6px 10px",
-                      borderRadius: "999px",
-                      border: "1px solid #b91c1c",
-                      backgroundColor: "transparent",
-                      color: canDelete ? "#fecaca" : "#6b7280",
-                      cursor: canDelete ? "pointer" : "not-allowed",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    ลบงาน
-                  </button>
+                    <div style={{ fontSize: "13px", color: "#9ca3af", marginBottom: "6px" }}>
+                      {task.detail || "— ไม่มีรายละเอียด —"}
+                    </div>
+
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", fontSize: "12px" }}>
+                      <span style={tagChipStyle}>สถานะ: {renderStatus(task.status)}</span>
+                      <span style={tagChipStyle}>ความสำคัญ: {renderPriority(task.priority)}</span>
+                      <span style={tagChipStyle}>
+                        กำหนดส่ง: {task.deadline ? task.deadline : "ยังไม่กำหนด"}
+                      </span>
+                    </div>
+
+                    {/* ✅ เพิ่มบรรทัดแสดง Tags (เพิ่มข้อมูลอย่างเดียว ไม่เปลี่ยนสี/เลย์เอาต์เดิม) */}
+                    <div
+                      style={{
+                        marginTop: "6px",
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "6px",
+                        fontSize: "12px",
+                      }}
+                    >
+                      <span style={tagChipStyle}>
+                        แท็ก:{" "}
+                        {tagsLoading
+                          ? "กำลังโหลด..."
+                          : !tags
+                          ? "—"
+                          : tags.length === 0
+                          ? "ไม่มี"
+                          : tags.map((t) => t.name).join(", ")}
+                      </span>
+                    </div>
+
+                    <div style={{ marginTop: "6px", fontSize: "11px", color: "#6b7280" }}>
+                      สร้างเมื่อ: {task.created_at || "-"}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/tasks/${task.id}`)}
+                      style={{
+                        fontSize: "12px",
+                        padding: "6px 10px",
+                        borderRadius: "999px",
+                        border: "1px solid rgba(148,163,184,0.8)",
+                        backgroundColor: "transparent",
+                        color: "#e5e7eb",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      ดูรายละเอียด
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteTask(task)}
+                      disabled={!canDeleteThisTask}
+                      style={{
+                        fontSize: "12px",
+                        padding: "6px 10px",
+                        borderRadius: "999px",
+                        border: "1px solid #b91c1c",
+                        backgroundColor: "transparent",
+                        color: canDeleteThisTask ? "#fecaca" : "#6b7280",
+                        cursor: canDeleteThisTask ? "pointer" : "not-allowed",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      ลบงาน
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>

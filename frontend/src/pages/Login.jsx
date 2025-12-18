@@ -5,8 +5,8 @@ import { api, setApiToken } from "../lib/api";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("fay@example.com");
-  const [password, setPassword] = useState("12345678");
+  const [email, setEmail] = useState("");       // ✅ ไม่เด้งเมลเก่าเอง
+  const [password, setPassword] = useState(""); // ✅ ไม่เด้งรหัสเก่าเอง
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -104,7 +104,7 @@ export default function LoginPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} autoComplete="off">
           <div style={{ marginBottom: "10px" }}>
             <label
               style={{ display: "block", fontSize: "14px", marginBottom: "4px" }}
@@ -115,6 +115,7 @@ export default function LoginPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              autoComplete="off"
               style={{
                 width: "100%",
                 padding: "8px 10px",
@@ -137,6 +138,7 @@ export default function LoginPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              autoComplete="new-password"
               style={{
                 width: "100%",
                 padding: "8px 10px",
@@ -178,7 +180,7 @@ export default function LoginPage() {
             opacity: 0.8,
           }}
         >
-          * ตอนนี้ใช้ user ทดสอบ: fay@example.com / 12345678
+          * สำหรับทดสอบ: @test.com / 12345678
         </p>
       </div>
     </div>

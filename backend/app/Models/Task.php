@@ -48,4 +48,11 @@ class Task extends Model
     {
         return $this->hasMany(TaskComment::class);
     }
+    public function tags()
+{
+    return $this->belongsToMany(\App\Models\Tag::class, 'task_tag')
+        ->withTimestamps();
 }
+
+}
+   

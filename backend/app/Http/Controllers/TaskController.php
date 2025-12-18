@@ -14,16 +14,30 @@ class TaskController extends Controller
      */
     public function index(Request $request)
     {
+        $request->validate([
+            'status'       => ['nullable', 'in:pending,in_progress,completed'],
+            'priority'     => ['nullable', 'in:low,normal,high'],
+            'assigned_to'  => ['nullable', 'integer', 'exists:users,id'],
+            'sort_by'      => ['nullable', 'in:created_at,deadline,priority,status'],
+            'sort_dir'     => ['nullable', 'in:asc,desc'],
+        ], [
+            'status.in'          => 'สถานะไม่ถูกต้อง',
+            'priority.in'        => 'ระดับความสำคัญไม่ถูกต้อง',
+            'assigned_to.exists' => 'ผู้รับงานไม่ถูกต้อง',
+            'sort_by.in'         => 'ฟิลด์ที่ใช้เรียงลำดับไม่ถูกต้อง',
+            'sort_dir.in'        => 'ทิศทางการเรียงลำดับต้องเป็น asc หรือ desc',
+        ]);
+
         $user = $request->user();
 
-        $query = Task::query();
+        // ✅ โหลด tags ไปเลย (ถ้า TaskResource แสดง tags จะได้ไม่ต้องยิง /tags)
+        $query = Task::with('tags');
 
-        // ถ้าเป็น staff เห็นได้เฉพาะงานของตัวเอง
-        if ($user->role === 'staff') {
+        // ✅ staff เห็นได้เฉพาะงานของตัวเอง
+        if ($user && $user->role === 'staff') {
             $query->where('assigned_to', $user->id);
         }
 
-        // filter ตาม status / priority / assigned_to (สำหรับ admin/manager)
         if ($status = $request->query('status')) {
             $query->where('status', $status);
         }
@@ -32,26 +46,16 @@ class TaskController extends Controller
             $query->where('priority', $priority);
         }
 
-        if ($assigned = $request->query('assigned_to')) {
-            $query->where('assigned_to', $assigned);
+        if ($assignedTo = $request->query('assigned_to')) {
+            $query->where('assigned_to', $assignedTo);
         }
 
-        // sort (default: created_at desc)
         $sortBy  = $request->query('sort_by', 'created_at');
         $sortDir = $request->query('sort_dir', 'desc');
 
-        if (! in_array($sortBy, ['created_at', 'deadline', 'priority', 'status'])) {
-            $sortBy = 'created_at';
-        }
-        if (! in_array($sortDir, ['asc', 'desc'])) {
-            $sortDir = 'desc';
-        }
-
         $query->orderBy($sortBy, $sortDir);
 
-        $tasks = $query->get();
-
-        return TaskResource::collection($tasks);
+        return TaskResource::collection($query->get());
     }
 
     /**
@@ -64,21 +68,32 @@ class TaskController extends Controller
 
         $data = $request->validate([
             'title'       => ['required', 'string', 'max:255'],
-            'detail'      => ['nullable', 'string'],
+            'detail'      => ['nullable', 'string', 'max:5000'],
             'status'      => ['required', 'in:pending,in_progress,completed'],
             'deadline'    => ['nullable', 'date'],
             'priority'    => ['required', 'in:low,normal,high'],
-            'assigned_to' => ['required', 'exists:users,id'],
+            'assigned_to' => ['nullable', 'integer', 'exists:users,id'],
+        ], [
+            'title.required'      => 'กรุณาใส่ชื่องาน',
+            'status.in'           => 'สถานะไม่ถูกต้อง',
+            'priority.in'         => 'ระดับความสำคัญไม่ถูกต้อง',
+            'assigned_to.exists'  => 'ผู้รับงานไม่ถูกต้อง',
+            'detail.max'          => 'รายละเอียดงานยาวเกินไป (สูงสุด 5000 ตัวอักษร)',
         ]);
 
-        // ถ้าเป็น staff ให้บังคับว่าต้อง assign ให้ตัวเองเท่านั้น
-        if ($user->role === 'staff') {
+        // ✅ staff สร้างได้เฉพาะงานของตัวเอง
+        if ($user && $user->role === 'staff') {
+            $data['assigned_to'] = $user->id;
+        }
+
+        // ✅ ถ้าไม่ส่ง assigned_to มา ให้ default เป็นตัวเอง
+        if (empty($data['assigned_to'])) {
             $data['assigned_to'] = $user->id;
         }
 
         $task = Task::create($data);
 
-        return new TaskResource($task);
+        return new TaskResource($task->load('tags'));
     }
 
     /**
@@ -87,46 +102,48 @@ class TaskController extends Controller
      */
     public function show(Request $request, Task $task)
     {
-        $user = $request->user();
-
-        // staff เห็นได้เฉพาะงานของตัวเอง
-        if ($user->role === 'staff' && $task->assigned_to !== $user->id) {
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
-
-        return new TaskResource($task);
+        $this->authorize('view', $task);
+        return new TaskResource($task->load('tags'));
     }
 
     /**
      * แก้งาน
-     * PUT /api/tasks/{task}
+     * PUT/PATCH /api/tasks/{task}
      */
     public function update(Request $request, Task $task)
     {
-        $user = $request->user();
-
-        // staff ห้ามแก้งานของคนอื่น
-        if ($user->role === 'staff' && $task->assigned_to !== $user->id) {
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
+        $this->authorize('update', $task);
 
         $data = $request->validate([
             'title'       => ['required', 'string', 'max:255'],
-            'detail'      => ['nullable', 'string'],
+            'detail'      => ['nullable', 'string', 'max:5000'],
             'status'      => ['required', 'in:pending,in_progress,completed'],
             'deadline'    => ['nullable', 'date'],
             'priority'    => ['required', 'in:low,normal,high'],
-            'assigned_to' => ['required', 'exists:users,id'],
+            'assigned_to' => ['nullable', 'integer', 'exists:users,id'],
+        ], [
+            'title.required'      => 'กรุณาใส่ชื่องาน',
+            'status.in'           => 'สถานะไม่ถูกต้อง',
+            'priority.in'         => 'ระดับความสำคัญไม่ถูกต้อง',
+            'assigned_to.exists'  => 'ผู้รับงานไม่ถูกต้อง',
+            'detail.max'          => 'รายละเอียดงานยาวเกินไป (สูงสุด 5000 ตัวอักษร)',
         ]);
 
-        // staff ยังแก้ assigned_to คนอื่นไม่ได้
-        if ($user->role === 'staff') {
+        $user = $request->user();
+
+        // ✅ staff ห้ามเปลี่ยนผู้รับงานเป็นคนอื่น
+        if ($user && $user->role === 'staff') {
             $data['assigned_to'] = $user->id;
+        }
+
+        // ✅ ถ้า admin/manager ไม่ส่ง assigned_to มา ให้คงค่าเดิม
+        if (!array_key_exists('assigned_to', $data) || $data['assigned_to'] === null) {
+            $data['assigned_to'] = $task->assigned_to;
         }
 
         $task->update($data);
 
-        return new TaskResource($task);
+        return new TaskResource($task->load('tags'));
     }
 
     /**
@@ -135,15 +152,23 @@ class TaskController extends Controller
      */
     public function destroy(Request $request, Task $task)
     {
-        $user = $request->user();
-
-        // staff ห้ามลบงาน
-        if ($user->role === 'staff') {
-            return response()->json(['message' => 'Forbidden'], 403);
-        }
+        $this->authorize('delete', $task);
 
         $task->delete();
-
         return response()->json(['message' => 'Deleted'], 200);
+    }
+
+    /**
+     * ✅ ดึง tags ของงาน
+     * GET /api/tasks/{task}/tags
+     */
+    public function tags(Request $request, Task $task)
+    {
+        // staff จะผ่านได้เฉพาะงานตัวเอง (ตาม TaskPolicy@view)
+        $this->authorize('view', $task);
+
+        return response()->json([
+            'tags' => $task->tags()->select('id', 'name')->orderBy('name')->get(),
+        ]);
     }
 }

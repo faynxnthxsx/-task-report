@@ -28,6 +28,16 @@ class TaskResource extends JsonResource
             // เวลา ส่งเป็น string ปลอดภัยด้วย optional()
             'created_at' => optional($this->created_at)->toDateTimeString(),
             'updated_at' => optional($this->updated_at)->toDateTimeString(),
-        ];
+
+              // ✅ เพิ่มตรงนี้
+          'tags' => $this->whenLoaded('tags', function () {
+        return $this->tags->map(fn ($tag) => [
+            'id' => $tag->id,
+            'name' => $tag->name,
+            'color' => $tag->color,
+        ]);
+    }),
+];
+        
     }
 }

@@ -9,31 +9,35 @@ class ReportController extends Controller
 {
     /**
      * Summary Report
-     * - ใช้สำหรับ Dashboard Reports หรือหน้า /reports
-     * - แสดงจำนวนงานแต่ละสถานะ รวมถึง overdue
-     * - staff เห็นเฉพาะงานที่ assigned_to ตัวเอง
+     * - staff เห็นเฉพาะงานตัวเอง (assigned_to)
      */
     public function summary(Request $request)
     {
         $user = $request->user();
 
-        $query = Task::query();
+        $base = Task::query();
 
-        // ถ้าเป็น staff → จำกัดให้เห็นเฉพาะงานตัวเอง
-        if ($user->role === 'staff') {
-            $query->where('assigned_to', $user->id);
+        if ($user && $user->role === 'staff') {
+            $base->where('assigned_to', $user->id);
         }
 
-        $total = $query->count();
+        $total       = (clone $base)->count();
+        $completed   = (clone $base)->where('status', 'completed')->count();
+        $pending     = (clone $base)->where('status', 'pending')->count();
+        $inProgress  = (clone $base)->where('status', 'in_progress')->count();
+
+        $overdue = (clone $base)
+            ->whereNotNull('deadline')
+            ->whereDate('deadline', '<', now()->toDateString())
+            ->where('status', '!=', 'completed')
+            ->count();
 
         return response()->json([
-            'total'        => $total,
-            'completed'    => $query->where('status', 'completed')->count(),
-            'pending'      => $query->where('status', 'pending')->count(),
-            'in_progress'  => $query->where('status', 'in_progress')->count(),
-            'overdue'      => $query->where('deadline', '<', now())
-                                    ->where('status', '!=', 'completed')
-                                    ->count(),
+            'total'       => $total,
+            'completed'   => $completed,
+            'pending'     => $pending,
+            'in_progress' => $inProgress,
+            'overdue'     => $overdue,
         ]);
     }
 }

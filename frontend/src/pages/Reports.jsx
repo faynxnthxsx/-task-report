@@ -52,17 +52,43 @@ export default function ReportsPage() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // ✅ Summary จาก /reports/summary
+  const [summary, setSummary] = useState(null);
+  const [loadingSummary, setLoadingSummary] = useState(true);
+  const [summaryError, setSummaryError] = useState("");
+
   // filter state (หน้า UI)
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [deadlineFilter, setDeadlineFilter] = useState("all");
 
-  // ⭐ ใหม่: filter ช่วง "วันที่สร้างงาน" (created_at)
+  // filter ช่วง "วันที่สร้างงาน" (created_at) — ทำฝั่ง frontend
   const [createdFrom, setCreatedFrom] = useState("");
   const [createdTo, setCreatedTo] = useState("");
 
-  // ดึง tasks จาก backend โดยใช้ filter หลัก (status + created_from/to)
+  // ✅ โหลด summary
+  const loadSummary = async () => {
+    setLoadingSummary(true);
+    setSummaryError("");
+    try {
+      const res = await api.get("/reports/summary");
+      setSummary(res.data ?? null);
+    } catch (err) {
+      console.error("โหลด summary ไม่สำเร็จ", err);
+      const msg = err.response?.data?.message || "โหลด summary ไม่สำเร็จ";
+      setSummaryError(msg);
+      setSummary(null);
+    } finally {
+      setLoadingSummary(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSummary();
+  }, []);
+
+  // ✅ ดึง tasks จาก backend โดยใช้ filter ที่ backend รองรับจริง
   const fetchTasks = async (filters = {}) => {
     try {
       setLoading(true);
@@ -73,16 +99,14 @@ export default function ReportsPage() {
         params.status = filters.status;
       }
 
-      if (filters.from) {
-        params.from = filters.from; // รูปแบบ YYYY-MM-DD
+      // (เลือกได้) ลดข้อมูลที่โหลด โดยส่ง priority ไปด้วย
+      if (filters.priority && filters.priority !== "all") {
+        params.priority = filters.priority;
       }
 
-      if (filters.to) {
-        params.to = filters.to; // รูปแบบ YYYY-MM-DD
-      }
-
-      // เรียงใหม่สุดอยู่บน (จะได้อ่านง่ายในหน้า report)
-      params.sort = "latest";
+      // ✅ ให้ตรง backend ของเธอ
+      params.sort_by = "created_at";
+      params.sort_dir = "desc";
 
       const res = await api.get("/tasks", { params });
 
@@ -96,17 +120,16 @@ export default function ReportsPage() {
     }
   };
 
-  // เรียก fetchTasks ทุกครั้งที่ status/createdFrom/createdTo เปลี่ยน
+  // เรียก fetchTasks ทุกครั้งที่ status/priority เปลี่ยน (อันนี้ backend รองรับจริง)
   useEffect(() => {
     fetchTasks({
       status: statusFilter,
-      from: createdFrom || undefined,
-      to: createdTo || undefined,
+      priority: priorityFilter,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, createdFrom, createdTo]);
+  }, [statusFilter, priorityFilter]);
 
-  // filter ฝั่ง frontend: search + priority + deadline
+  // filter ฝั่ง frontend: search + deadline + created_from/to
   const filteredTasks = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -117,14 +140,15 @@ export default function ReportsPage() {
       const q = search.trim().toLowerCase();
       if (q && !text.includes(q)) return false;
 
-      // (ซ้ำกับ backend แต่กันเผื่อ)
+      // status (กันเผื่อ)
       if (statusFilter !== "all" && t.status !== statusFilter) return false;
 
+      // priority (กันเผื่อ)
       if (priorityFilter !== "all" && t.priority !== priorityFilter) {
         return false;
       }
 
-      // filter ตาม deadline (ยังเป็น logic ฝั่ง frontend)
+      // filter ตาม deadline (logic ฝั่ง frontend)
       if (deadlineFilter !== "all") {
         const d = t.deadline ? toDate(t.deadline) : null;
 
@@ -143,12 +167,14 @@ export default function ReportsPage() {
         }
       }
 
-      // filter created_at แบบ frontend (ซ้ำกับ backend เพื่อความชัวร์)
+      // filter created_at (frontend)
       const created = t.created_at ? toDate(t.created_at) : null;
+
       if (createdFrom) {
         const fromDate = toDate(createdFrom);
         if (fromDate && created && created < fromDate) return false;
       }
+
       if (createdTo) {
         const toDateObj = toDate(createdTo);
         if (toDateObj && created && created > toDateObj) return false;
@@ -156,15 +182,7 @@ export default function ReportsPage() {
 
       return true;
     });
-  }, [
-    tasks,
-    search,
-    statusFilter,
-    priorityFilter,
-    deadlineFilter,
-    createdFrom,
-    createdTo,
-  ]);
+  }, [tasks, search, statusFilter, priorityFilter, deadlineFilter, createdFrom, createdTo]);
 
   const counts = {
     total: tasks.length,
@@ -256,6 +274,7 @@ export default function ReportsPage() {
             สรุปรายการงาน พร้อม filter และ export เป็น CSV ได้
           </p>
         </div>
+
         <div
           style={{
             textAlign: "right",
@@ -267,6 +286,104 @@ export default function ReportsPage() {
           <div>หลังกรอง: {counts.filtered} งาน</div>
           <div>เสร็จแล้ว: {counts.completed} งาน</div>
           <div>ค้าง/กำลังทำ: {counts.pending + counts.inProgress} งาน</div>
+        </div>
+      </div>
+
+      {/* ✅ Summary box (ไม่แตะสีเดิม ใช้ style กล่องเดิม) */}
+      <div
+        style={{
+          borderRadius: "18px",
+          padding: "16px",
+          marginBottom: "16px",
+          border: "1px solid rgba(148,163,184,0.4)",
+          background:
+            "radial-gradient(circle at top left,#020617,#020617,#020617)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "baseline",
+            gap: "12px",
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ fontSize: "14px", fontWeight: 600 }}>
+            Summary (จาก /reports/summary)
+          </div>
+
+          <button
+            type="button"
+            onClick={loadSummary}
+            style={{
+              padding: "8px 14px",
+              borderRadius: "999px",
+              border: "none",
+              background: "linear-gradient(to right,#6366f1,#8b5cf6)",
+              color: "#fff",
+              fontSize: "13px",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            รีเฟรช Summary
+          </button>
+        </div>
+
+        {summaryError && (
+          <div
+            style={{
+              marginTop: "10px",
+              padding: "8px 10px",
+              borderRadius: "10px",
+              backgroundColor: "#7f1d1d",
+              border: "1px solid #fecaca",
+              fontSize: "13px",
+            }}
+          >
+            {summaryError}
+          </div>
+        )}
+
+        <div style={{ marginTop: "10px", fontSize: "13px", opacity: 0.9 }}>
+          {loadingSummary ? (
+            <div style={{ color: "#9ca3af" }}>กำลังโหลด summary...</div>
+          ) : !summary ? (
+            <div style={{ color: "#6b7280" }}>ยังไม่มีข้อมูล summary</div>
+          ) : (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "10px",
+              }}
+            >
+              {[
+                ["ทั้งหมด", summary.total],
+                ["ค้างอยู่", summary.pending],
+                ["กำลังทำ", summary.in_progress],
+                ["เสร็จแล้ว", summary.completed],
+                ["เกินกำหนด", summary.overdue],
+              ].map(([label, value]) => (
+                <div
+                  key={label}
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: "12px",
+                    border: "1px solid rgba(148,163,184,0.4)",
+                    backgroundColor: "#020617",
+                    minWidth: "170px",
+                  }}
+                >
+                  <div style={{ fontSize: "12px", color: "#9ca3af" }}>{label}</div>
+                  <div style={{ fontSize: "18px", fontWeight: 700, marginTop: "4px" }}>
+                    {Number.isFinite(Number(value)) ? Number(value) : (value ?? 0)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -388,7 +505,7 @@ export default function ReportsPage() {
             </select>
           </div>
 
-          {/* ⭐ filter วันที่สร้าง: from */}
+          {/* filter วันที่สร้าง: from */}
           <div style={{ flex: 1, minWidth: "180px" }}>
             <label style={{ display: "block", fontSize: "13px" }}>
               วันที่สร้าง (ตั้งแต่)
@@ -410,7 +527,7 @@ export default function ReportsPage() {
             />
           </div>
 
-          {/* ⭐ filter วันที่สร้าง: to */}
+          {/* filter วันที่สร้าง: to */}
           <div style={{ flex: 1, minWidth: "180px" }}>
             <label style={{ display: "block", fontSize: "13px" }}>
               วันที่สร้าง (ถึง)
